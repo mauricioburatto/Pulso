@@ -4,3 +4,4 @@ node_modules/
 *.log
 server/uploads/
 server/dev-emails/
+web/dist/
