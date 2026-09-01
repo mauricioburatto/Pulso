@@ -21,6 +21,10 @@ if (process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
   process.exit(1);
 }
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.warn('ANTHROPIC_API_KEY ausente — as rotas /ai/* responderão 503 até ela ser configurada.');
+}
+
 const app = require('./app');
 
 const PORT = process.env.PORT || 3000;

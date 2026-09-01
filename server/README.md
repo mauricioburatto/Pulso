@@ -46,6 +46,28 @@ O código é armazenado com hash (sha256) na tabela
 `password_reset_tokens`; um novo pedido invalida qualquer código anterior
 não usado da mesma conta.
 
+### Fase 4 — proxy de IA
+
+Um endpoint por funcionalidade de IA do protótipo (`PerformanceApp.jsx`),
+reaproveitando os mesmos system prompts, exatamente como estão — só a
+`ANTHROPIC_API_KEY` migrou do navegador para o servidor:
+
+- `POST /ai/ler-print-treino` — imagem (print de relógio/app) → dados do treino
+- `POST /ai/interpretar-treino-texto` — descrição em texto → dados do treino
+- `POST /ai/gerar-planilha` — gera a planilha de treino (considera modalidades, meta, avaliação de nível)
+- `POST /ai/detalhar-sessao` — detalha uma sessão específica da planilha
+- `POST /ai/avaliacao-treino-atual` — texto e/ou imagem/PDF → nível e dificuldade real do treino atual
+- `POST /ai/avaliacao-corporal` — duas fotos (frente/lado) → composição corporal estimada
+- `POST /ai/gerar-dieta` — gera um dia alimentar (o casamento com a base TACO continua no frontend)
+- `POST /ai/sugestao-suplementacao` — texto de suplementação (preparação + dia da prova)
+- `POST /ai/analise-evolucao` — retrospecto de evolução a partir do histórico de treinos
+- `POST /ai/relatorio` — relatório diário ou semanal (`{ "kind": "daily"|"weekly" }`)
+
+Todas protegidas por sessão e com rate limit de 30 requisições/15min por
+conta. Sem `ANTHROPIC_API_KEY` configurada, todas respondem `503`. O
+modelo usado é `claude-sonnet-4-6` (o mesmo já testado no protótipo);
+pode ser trocado via `ANTHROPIC_MODEL` sem alterar código.
+
 ## Armazenamento de imagens
 
 Por padrão (sem `S3_BUCKET` configurado), as fotos são salvas em disco em
