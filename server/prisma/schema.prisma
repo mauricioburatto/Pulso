@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  modality     String?
+  level        String?
+  weight       Float?
+  height       Float?
+  trainingTime String?  @map("training_time")
+  birthDate    DateTime? @map("birth_date")
+  sex          String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  athleteCore AthleteCore?
+
+  @@map("accounts")
+}
+
+model AthleteCore {
+  athleteId String   @id @map("athlete_id")
+  account   Account  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("athlete_core")
+}
