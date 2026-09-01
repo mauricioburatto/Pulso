@@ -21,7 +21,8 @@ model Account {
   sex          String?
   createdAt    DateTime @default(now()) @map("created_at")
 
-  athleteCore AthleteCore?
+  athleteCore  AthleteCore?
+  athletePhotos AthletePhoto[]
 
   @@map("accounts")
 }
@@ -33,4 +34,18 @@ model AthleteCore {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("athlete_core")
+}
+
+model AthletePhoto {
+  id        String   @id @default(uuid())
+  athleteId String   @map("athlete_id")
+  account   Account  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  date      DateTime
+  notes     String?
+  objectKey String   @map("object_key")
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("athlete_photos")
+  @@index([athleteId])
 }
