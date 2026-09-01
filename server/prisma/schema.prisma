@@ -21,8 +21,9 @@ model Account {
   sex          String?
   createdAt    DateTime @default(now()) @map("created_at")
 
-  athleteCore  AthleteCore?
-  athletePhotos AthletePhoto[]
+  athleteCore         AthleteCore?
+  athletePhotos       AthletePhoto[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("accounts")
 }
@@ -48,4 +49,17 @@ model AthletePhoto {
 
   @@map("athlete_photos")
   @@index([athleteId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  accountId String    @map("account_id")
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  codeHash  String    @map("code_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("password_reset_tokens")
+  @@index([accountId])
 }

@@ -16,6 +16,11 @@ if (process.env.S3_BUCKET) {
   }
 }
 
+if (process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
+  console.error('RESEND_API_KEY definido, mas falta a variável obrigatória: RESEND_FROM_EMAIL');
+  process.exit(1);
+}
+
 const app = require('./app');
 
 const PORT = process.env.PORT || 3000;

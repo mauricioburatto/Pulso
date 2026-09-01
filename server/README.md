@@ -34,6 +34,18 @@ bcrypt.
 
 Todas protegidas por sessão; cada conta só enxerga seus próprios dados.
 
+### Fase 3 — recuperação de senha
+
+- `POST /auth/forgot-password` — gera um código de 6 dígitos (10 min de
+  validade) e envia por email. Resposta idêntica exista ou não a conta,
+  para não revelar quais emails estão cadastrados.
+- `POST /auth/reset-password` — valida o código e troca a senha
+  (`{ "email", "code", "newPassword" }`)
+
+O código é armazenado com hash (sha256) na tabela
+`password_reset_tokens`; um novo pedido invalida qualquer código anterior
+não usado da mesma conta.
+
 ## Armazenamento de imagens
 
 Por padrão (sem `S3_BUCKET` configurado), as fotos são salvas em disco em
@@ -54,3 +66,10 @@ S3_PUBLIC_URL_BASE=https://...  # domínio público do bucket
 
 Quando `S3_BUCKET` está definido, o app passa a gravar direto no bucket
 em vez do disco local — nenhuma mudança de código é necessária.
+
+## Envio de email
+
+Por padrão (sem `RESEND_API_KEY` configurado), o email de recuperação de
+senha é apenas gravado em `server/dev-emails/` — só para desenvolvimento,
+sem enviar nada de verdade. Para produção, configure `RESEND_API_KEY` e
+`RESEND_FROM_EMAIL` no `.env` (conta no [Resend](https://resend.com)).
