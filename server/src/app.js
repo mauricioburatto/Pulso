@@ -10,6 +10,15 @@ const storage = require('./storage');
 
 const app = express();
 
+// Railway/Render (e provedores similares) colocam o app atrás de um proxy
+// reverso — sem isso, req.ip vem sempre do proxy (quebra o rate limiting por
+// IP) e o express-rate-limit lança erro ao ver X-Forwarded-For sem essa
+// configuração. "1" = confia só no primeiro hop, que é o proxy da própria
+// plataforma.
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

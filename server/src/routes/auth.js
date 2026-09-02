@@ -43,16 +43,23 @@ function publicAccount(account) {
   return rest;
 }
 
+// Em produção, frontend e backend normalmente vivem em domínios diferentes
+// (ex: Vercel + Railway) — isso torna a requisição "cross-site" aos olhos do
+// navegador, e cookies só são enviados nesse caso com SameSite=None (que por
+// sua vez exige Secure). Em dev, localhost:5173 e localhost:3000 contam como
+// o mesmo "site", então Lax já basta e evita exigir HTTPS local.
+const isProduction = process.env.NODE_ENV === 'production';
+const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? 'none' : 'lax',
+};
+
 function setSessionCookie(res, accountId) {
   const token = jwt.sign({ accountId }, process.env.JWT_SECRET, {
     expiresIn: '7d',
   });
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_MAX_AGE_MS,
-  });
+  res.cookie(SESSION_COOKIE, token, { ...SESSION_COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE_MS });
 }
 
 router.post('/signup', authLimiter, async (req, res) => {
@@ -154,7 +161,7 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie(SESSION_COOKIE);
+  res.clearCookie(SESSION_COOKIE, SESSION_COOKIE_OPTIONS);
   res.status(204).end();
 });
 
