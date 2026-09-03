@@ -934,10 +934,6 @@ function ProfileGate({ onEnter }) {
               <Btn variant="primary" onClick={handleSignup} disabled={submitting}>
                 {submitting ? "Criando conta..." : "Criar conta e entrar"}
               </Btn>
-              <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted, textAlign: "center" }}>
-                Seus dados ficam salvos neste dispositivo/navegador. Como o app ainda não tem
-                servidor, isso não é uma conta sincronizada entre aparelhos.
-              </div>
             </div>
           </Card>
         )}
