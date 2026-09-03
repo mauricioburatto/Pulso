@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  modality     String?
+  level        String?
+  weight       Float?
+  height       Float?
+  trainingTime String?  @map("training_time")
+  birthDate    DateTime? @map("birth_date")
+  sex          String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  athleteCore         AthleteCore?
+  athletePhotos       AthletePhoto[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@map("accounts")
+}
+
+model AthleteCore {
+  athleteId String   @id @map("athlete_id")
+  account   Account  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("athlete_core")
+}
+
+model AthletePhoto {
+  id        String   @id @default(uuid())
+  athleteId String   @map("athlete_id")
+  account   Account  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  date      DateTime
+  notes     String?
+  objectKey String   @map("object_key")
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("athlete_photos")
+  @@index([athleteId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  accountId String    @map("account_id")
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  codeHash  String    @map("code_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("password_reset_tokens")
+  @@index([accountId])
+}
