@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic } from "lucide-react";
 
 /* ============================================================
    DESIGN TOKENS
@@ -197,6 +197,18 @@ function calcAge(birthDateStr) {
   const m = now.getMonth() - b.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
   return age;
+}
+
+// Resume as modalidades que o atleta realmente cadastrou no dashboard —
+// substitui o antigo campo fixo profile.modality, que não existe mais.
+function modalitiesSummary(core) {
+  const mods = core?.modalities || [];
+  if (mods.length === 0) return "nenhuma modalidade cadastrada ainda";
+  return mods.map((m) => `${m.name} (${m.frequency})`).join(", ");
+}
+function primaryModalityName(core) {
+  const mods = core?.modalities || [];
+  return mods.length > 0 ? mods[0].name : "nenhuma modalidade cadastrada";
 }
 
 /* ============================================================
@@ -551,7 +563,6 @@ function ProfileGate({ onEnter }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [modality, setModality] = useState("Corrida de rua");
   const [level, setLevel] = useState("Amador");
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
@@ -621,7 +632,6 @@ function ProfileGate({ onEnter }) {
       name: name.trim(),
       email: emailNorm,
       passwordHash: hashPassword(password),
-      modality,
       level,
       weight: weight.trim(),
       height: height.trim(),
@@ -1013,17 +1023,6 @@ function ProfileGate({ onEnter }) {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSignup()}
               />
-              <Select value={modality} onChange={(e) => setModality(e.target.value)}>
-                <option>Corrida de rua</option>
-                <option>Ciclismo</option>
-                <option>Triatlo</option>
-                <option>Crossfit</option>
-                <option>Luta / MMA / Combate</option>
-                <option>Futebol</option>
-                <option>Natação</option>
-                <option>Musculação / Força</option>
-                <option>Outra</option>
-              </Select>
               <Select value={level} onChange={(e) => setLevel(e.target.value)}>
                 <option>Amador</option>
                 <option>Semi-amador</option>
@@ -1093,7 +1092,7 @@ const TABS = [
   { id: "dashboard", label: "Painel" },
   { id: "metas", label: "Metas & Provas" },
   { id: "treinos", label: "Treinos" },
-  { id: "sincronia", label: "Sincronia (print)" },
+  { id: "sincronia", label: "Sincronizar treino" },
   { id: "evolucao", label: "Evolução física" },
   { id: "suplementos", label: "Suplementos" },
   { id: "nutricao", label: "Nutrição" },
@@ -1187,9 +1186,6 @@ function Sidebar({ profile, active, setActive, onSwitch, isFullscreen, toggleFul
         </div>
         <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12.5, color: T.textPrimary, marginTop: 8 }}>
           {profile.name}
-        </div>
-        <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted, marginTop: 1 }}>
-          {profile.modality}
         </div>
       </div>
       <div style={{ padding: "0 20px" }}>
@@ -1336,7 +1332,7 @@ function MobileDrawer({ open, onClose, profile, active, setActive, onSwitch }) {
           </button>
         </div>
         <div style={{ padding: "0 18px 10px", fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>
-          {profile.name} · {profile.modality}
+          {profile.name}
         </div>
         <div style={{ padding: "0 18px" }}>
           <PulseDivider height={14} />
@@ -1463,7 +1459,15 @@ function Dashboard({ core, profile }) {
     });
 
   const totalDuration = last7.reduce((s, t) => s + (Number(t.duration) || 0), 0);
-  const totalDistance = last7.reduce((s, t) => s + (Number(t.distance) || 0), 0);
+  const distanceRelevant = last7.filter((t) => {
+    const ty = (t.type || "").toLowerCase();
+    return (
+      (ty.includes("corrida") || ty.includes("caminhada") || ty.includes("ciclismo") || ty.includes("bike") || ty.includes("pedal")) &&
+      Number(t.distance) > 0
+    );
+  });
+  const totalDistance = distanceRelevant.reduce((s, t) => s + (Number(t.distance) || 0), 0);
+  const showDistance = distanceRelevant.length > 0;
   const avgEffort =
     last7.length > 0
       ? (last7.reduce((s, t) => s + (Number(t.effort) || 0), 0) / last7.length).toFixed(1)
@@ -1527,8 +1531,8 @@ function Dashboard({ core, profile }) {
         {[
           { label: "Treinos (7 dias)", value: last7.length, unit: "sessões" },
           { label: "Duração total", value: totalDuration, unit: "min" },
-          { label: "Distância total", value: totalDistance.toFixed(1), unit: "km" },
-          { label: "Esforço médio", value: avgEffort, unit: "/10" },
+          ...(showDistance ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km" }] : []),
+          { label: "PSE médio", value: avgEffort, unit: "/10" },
         ].map((s) => (
           <Card key={s.label} style={{ padding: 14 }}>
             <Label>{s.label}</Label>
@@ -1698,32 +1702,8 @@ function modalityColor(name) {
 
 const MODALITY_GROUPS = [
   {
-    label: "Corrida & endurance",
-    options: ["Corrida de rua", "Trail running", "Ultramaratona", "Duatlo", "Triatlo", "Caminhada / marcha atlética"],
-  },
-  {
-    label: "Ciclismo & remo",
-    options: ["Ciclismo de estrada", "Mountain bike", "Spinning / indoor bike", "Remo", "Canoagem"],
-  },
-  {
-    label: "Natação & aquáticos",
-    options: ["Natação", "Surf", "Triatlo aquático"],
-  },
-  {
-    label: "Força & funcional",
-    options: ["Crossfit", "Musculação / força", "Levantamento de peso olímpico", "Powerlifting", "Calistenia", "Treinamento funcional", "Hyrox"],
-  },
-  {
-    label: "Lutas & combate",
-    options: ["Jiu-jitsu", "MMA", "Boxe", "Muay Thai", "Judô", "Karatê", "Taekwondo", "Wrestling / luta olímpica", "Kickboxing"],
-  },
-  {
-    label: "Esportes de quadra e campo",
-    options: ["Futebol", "Futsal", "Vôlei", "Basquete", "Handebol", "Tênis", "Beach tennis", "Padel"],
-  },
-  {
-    label: "Outras modalidades",
-    options: ["Atletismo (pista e campo)", "Ginástica artística", "Escalada", "Patinação", "Skate", "Hipismo", "Yoga", "Pilates"],
+    label: "Modalidades",
+    options: ["Corrida de rua", "Ciclismo", "Natação", "Musculação / Academia", "Treino em casa (calistenia/funcional)"],
   },
 ];
 
@@ -2006,7 +1986,7 @@ function TreinoAtualImport({ core, updateCore, profile }) {
       }
       contentBlocks.push({
         type: "text",
-        text: `Contexto do atleta: ${profile.name}, nível autodeclarado ${profile.level}, modalidade principal ${profile.modality}.`,
+        text: `Contexto do atleta: ${profile.name}, nível autodeclarado ${profile.level}, modalidades praticadas: ${modalitiesSummary(core)}.`,
       });
 
       if (file) {
@@ -2138,6 +2118,46 @@ function Treinos({ core, updateCore, profile }) {
   const [weeks, setWeeks] = useState(2);
   const [copyMsg, setCopyMsg] = useState("");
   const [expandedIds, setExpandedIds] = useState({});
+  const [isRecordingNotes, setIsRecordingNotes] = useState(false);
+  const [speechError, setSpeechError] = useState("");
+  const recognitionRef = useRef(null);
+  const speechSupported =
+    typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function toggleNotesRecording() {
+    if (!speechSupported) return;
+    setSpeechError("");
+    if (isRecordingNotes) {
+      recognitionRef.current && recognitionRef.current.stop();
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = "pt-BR";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.onresult = (e) => {
+      let transcript = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      if (transcript.trim()) {
+        setForm((f) => ({ ...f, notes: f.notes ? `${f.notes} ${transcript.trim()}` : transcript.trim() }));
+      }
+    };
+    recognition.onerror = (e) => {
+      setSpeechError(
+        e.error === "not-allowed"
+          ? "Permissão de microfone negada — habilite o acesso ao microfone nas configurações do navegador."
+          : "Não consegui captar o áudio. Tente novamente."
+      );
+      setIsRecordingNotes(false);
+    };
+    recognition.onend = () => setIsRecordingNotes(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecordingNotes(true);
+  }
   const [detailLoading, setDetailLoading] = useState({});
   const [detailError, setDetailError] = useState({});
 
@@ -2501,13 +2521,47 @@ ${nextGoal ? `Meta/prova relacionada: ${nextGoal.title} em ${nextGoal.targetDate
           <Select value={form.effort} onChange={(e) => setForm({ ...form, effort: e.target.value })}>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
-                Esforço {n}/10
+                PSE {n}/10
               </option>
             ))}
           </Select>
         </div>
+        <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted, marginTop: 6 }}>
+          PSE = Percepção Subjetiva de Esforço (escala de Borg 1-10) — quão puxado o treino pareceu pra você.
+        </div>
         <div style={{ marginTop: 10 }}>
-          <TextArea rows={2} placeholder="Notas (sensações, clima, etc.)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <TextArea
+              rows={2}
+              placeholder="Notas (sensações, clima, etc.)"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              style={{ flex: 1 }}
+            />
+            {speechSupported && (
+              <Btn
+                variant={isRecordingNotes ? "danger" : "ghost"}
+                onClick={toggleNotesRecording}
+                style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "9px 12px" }}
+              >
+                <Mic size={15} />
+                {isRecordingNotes ? "Parar" : "Falar"}
+              </Btn>
+            )}
+          </div>
+          {isRecordingNotes && (
+            <div style={{ fontFamily: "Inter", fontSize: 11.5, color: T.coral, marginTop: 6 }}>
+              ● Gravando — fale suas observações e clique em "Parar" quando terminar.
+            </div>
+          )}
+          {speechError && (
+            <div style={{ fontFamily: "Inter", fontSize: 11.5, color: T.danger, marginTop: 6 }}>{speechError}</div>
+          )}
+          {!speechSupported && (
+            <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted, marginTop: 6 }}>
+              Ditado por voz não é suportado neste navegador — funciona no Chrome, Edge ou Safari recentes.
+            </div>
+          )}
         </div>
         <div style={{ marginTop: 10 }}>
           <Btn variant="primary" onClick={addTraining}>
@@ -2699,8 +2753,13 @@ function Sincronia({ core, updateCore }) {
           type="file"
           accept="image/*"
           onChange={(e) => handleFile(e.target.files[0])}
-          style={{ fontFamily: "Inter", fontSize: 13, color: T.textMuted }}
+          style={{ display: "none" }}
         />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <Btn variant="ghost" onClick={() => fileRef.current && fileRef.current.click()}>
+            Escolher arquivo
+          </Btn>
+        </div>
 
         {preview && (
           <div style={{ marginTop: 14, display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -3375,7 +3434,7 @@ const BODY_PROTOCOL_STEPS = [
   {
     title: "Foto de lado (lado direito)",
     detail:
-      "Apenas o braço direito erguido à frente, costas da mão para a câmera, dedos unidos. Perna e braço esquerdos não devem aparecer na foto.",
+      "Braço direito erguido à frente, costas da mão para a câmera, dedos unidos. Perna e braço esquerdos não devem aparecer na foto.",
   },
   {
     title: "Câmera e ambiente",
@@ -3421,7 +3480,7 @@ function AvaliacaoFisica({ athleteId, profile, core, updateCore }) {
     try {
       const system = `Você é um avaliador físico auxiliando uma leitura visual de composição corporal a partir de duas fotos (frente e lado direito), seguindo o protocolo padrão de aferição por bioimpedância visual. Use idade, sexo, peso e altura informados para calibrar a estimativa das medidas. Responda APENAS com um objeto JSON compacto, sem texto antes ou depois, sem markdown, no formato: {"fatPercent":número estimado de percentual de gordura (ex: 23.5),"waist":circunferência de cintura estimada em cm,"hip":circunferência de quadril estimada em cm,"arm":circunferência de braço em cm,"forearm":circunferência de antebraço em cm,"thigh":circunferência de coxa em cm,"calf":circunferência de panturrilha em cm,"muscleNote":"observação curta sobre massa muscular aparente","postureNote":"observação curta sobre postura/simetria, ou null","protocolIssues":"se as fotos não seguiram bem o protocolo (roupa larga, ângulo, iluminação, pose incorreta), descreva aqui objetivamente; caso contrário null"}. Todos os valores numéricos devem ser números, não strings.`;
 
-      const userMsg = `Atleta: ${profile.name}, ${age ? `${age} anos` : "idade não informada"}, sexo ${profile.sex || "não informado"}, peso ${profile.weight || "?"}kg, altura ${profile.height || "?"}m, modalidade ${profile.modality}, nível ${profile.level}.`;
+      const userMsg = `Atleta: ${profile.name}, ${age ? `${age} anos` : "idade não informada"}, sexo ${profile.sex || "não informado"}, peso ${profile.weight || "?"}kg, altura ${profile.height || "?"}m, modalidades: ${modalitiesSummary(core)}, nível ${profile.level}.`;
 
       const { text } = await callClaude({
         system,
@@ -3862,17 +3921,29 @@ function computeItemMacros(item) {
   };
 }
 
+function optionMacros(option) {
+  const total = { kcal: 0, protein: 0, carb: 0, fat: 0 };
+  (option?.items || []).forEach((it) => {
+    const v = computeItemMacros(it);
+    total.kcal += v.kcal;
+    total.protein += v.protein;
+    total.carb += v.carb;
+    total.fat += v.fat;
+  });
+  return total;
+}
+
+// Totais do dia = soma da Opção 1 (referência) de cada refeição — as demais
+// opções são equivalentes/alternativas, não somam por cima.
 function sumMacros(meals) {
   const total = { kcal: 0, protein: 0, carb: 0, fat: 0 };
-  meals.forEach((m) =>
-    m.items.forEach((it) => {
-      const v = computeItemMacros(it);
-      total.kcal += v.kcal;
-      total.protein += v.protein;
-      total.carb += v.carb;
-      total.fat += v.fat;
-    })
-  );
+  meals.forEach((m) => {
+    const ref = optionMacros(m.options?.[0]);
+    total.kcal += ref.kcal;
+    total.protein += ref.protein;
+    total.carb += ref.carb;
+    total.fat += ref.fat;
+  });
   return total;
 }
 
@@ -3894,7 +3965,7 @@ function MacroBar({ label, value, target, color, unit }) {
   );
 }
 
-function MealCard({ meal, core, updateCore }) {
+function MealOption({ meal, option, optIndex, core, updateCore, canRemove }) {
   const [query, setQuery] = useState("");
   const [grams, setGrams] = useState(100);
   const suggestions =
@@ -3912,6 +3983,13 @@ function MealCard({ meal, core, updateCore }) {
     });
   }
 
+  function updateOption(fn) {
+    updateMeal((m) => ({
+      ...m,
+      options: m.options.map((o) => (o.id === option.id ? fn(o) : o)),
+    }));
+  }
+
   function addFood(food) {
     const item = {
       id: "it_" + Date.now(),
@@ -3922,43 +4000,42 @@ function MealCard({ meal, core, updateCore }) {
       carbPer100: food.carb || 0,
       fatPer100: food.lipids || 0,
     };
-    updateMeal((m) => ({ ...m, items: [...m.items, item] }));
+    updateOption((o) => ({ ...o, items: [...o.items, item] }));
     setQuery("");
     setGrams(100);
   }
 
   function removeItem(itemId) {
-    updateMeal((m) => ({ ...m, items: m.items.filter((it) => it.id !== itemId) }));
+    updateOption((o) => ({ ...o, items: o.items.filter((it) => it.id !== itemId) }));
   }
 
   function updateItemGrams(itemId, g) {
-    updateMeal((m) => ({ ...m, items: m.items.map((it) => (it.id === itemId ? { ...it, grams: g } : it)) }));
+    updateOption((o) => ({ ...o, items: o.items.map((it) => (it.id === itemId ? { ...it, grams: g } : it)) }));
   }
 
-  function removeMeal() {
-    updateCore({ ...core, diet: { ...core.diet, meals: core.diet.meals.filter((m) => m.id !== meal.id) } });
+  function removeOption() {
+    updateMeal((m) => ({ ...m, options: m.options.filter((o) => o.id !== option.id) }));
   }
 
-  const mealTotal = sumMacros([meal]);
+  const total = optionMacros(option);
 
   return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div>
-          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14 }}>{meal.name}</div>
-          {meal.time && <div style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{meal.time}</div>}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: T.coral }}>{mealTotal.kcal.toFixed(0)} kcal</span>
-          <button onClick={removeMeal} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}>
-            remover refeição
-          </button>
+    <div style={{ background: T.bgElevated, borderRadius: 8, padding: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <Pill color={optIndex === 0 ? T.gold : T.steel}>Opção {optIndex + 1}{optIndex === 0 ? " (referência)" : ""}</Pill>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{total.kcal.toFixed(0)} kcal</span>
+          {canRemove && (
+            <button onClick={removeOption} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}>
+              remover opção
+            </button>
+          )}
         </div>
       </div>
 
-      {meal.items.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          {meal.items.map((it) => {
+      {option.items.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {option.items.map((it) => {
             const v = computeItemMacros(it);
             return (
               <div
@@ -3969,9 +4046,9 @@ function MealCard({ meal, core, updateCore }) {
                   gap: 8,
                   alignItems: "center",
                   justifyContent: "space-between",
-                  background: T.bgElevated,
-                  borderRadius: 7,
-                  padding: "8px 10px",
+                  background: T.bg,
+                  borderRadius: 6,
+                  padding: "7px 9px",
                 }}
               >
                 <div style={{ fontFamily: "Inter", fontSize: 12.5, flex: 1, minWidth: 140 }}>{it.name}</div>
@@ -3983,7 +4060,7 @@ function MealCard({ meal, core, updateCore }) {
                     onChange={(e) => updateItemGrams(it.id, Number(e.target.value))}
                     style={{
                       width: 56,
-                      background: T.bg,
+                      background: T.bgElevated,
                       border: `1px solid ${T.border}`,
                       borderRadius: 6,
                       padding: "4px 6px",
@@ -3994,7 +4071,7 @@ function MealCard({ meal, core, updateCore }) {
                   />
                   <span style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted }}>g</span>
                 </div>
-                <div style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>
+                <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted }}>
                   {v.kcal.toFixed(0)}kcal · P{v.protein.toFixed(0)} · C{v.carb.toFixed(0)} · G{v.fat.toFixed(0)}
                 </div>
                 <button onClick={() => removeItem(it.id)} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}>
@@ -4009,16 +4086,17 @@ function MealCard({ meal, core, updateCore }) {
       <div style={{ position: "relative" }}>
         <div style={{ display: "flex", gap: 8 }}>
           <Input
-            placeholder="Buscar alimento na TACO para adicionar..."
+            placeholder="Buscar alimento na TACO..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            style={{ fontSize: 12.5 }}
           />
           <Input
             type="number"
             min="0"
             value={grams}
             onChange={(e) => setGrams(Number(e.target.value))}
-            style={{ width: 80, flexShrink: 0 }}
+            style={{ width: 70, flexShrink: 0, fontSize: 12.5 }}
           />
         </div>
         {suggestions.length > 0 && (
@@ -4033,7 +4111,7 @@ function MealCard({ meal, core, updateCore }) {
               border: `1px solid ${T.border}`,
               borderRadius: 7,
               marginTop: 4,
-              maxHeight: 220,
+              maxHeight: 200,
               overflowY: "auto",
             }}
           >
@@ -4047,19 +4125,100 @@ function MealCard({ meal, core, updateCore }) {
                   textAlign: "left",
                   background: "none",
                   border: "none",
-                  padding: "8px 12px",
+                  padding: "7px 11px",
                   cursor: "pointer",
                   color: T.textPrimary,
                   fontFamily: "Inter",
-                  fontSize: 12.5,
+                  fontSize: 12,
                   borderBottom: `1px solid ${T.border}`,
                 }}
               >
-                {f.name} <span style={{ color: T.textMuted, fontFamily: "JetBrains Mono", fontSize: 11 }}>({f.kcal}kcal/100g)</span>
+                {f.name} <span style={{ color: T.textMuted, fontFamily: "JetBrains Mono", fontSize: 10.5 }}>({f.kcal}kcal/100g)</span>
               </button>
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function MealCard({ meal, core, updateCore }) {
+  function updateMeal(fn) {
+    updateCore({
+      ...core,
+      diet: {
+        ...core.diet,
+        meals: core.diet.meals.map((m) => (m.id === meal.id ? fn(m) : m)),
+      },
+    });
+  }
+
+  function addOption() {
+    updateMeal((m) => ({ ...m, options: [...m.options, { id: "opt_" + Date.now(), items: [] }] }));
+  }
+
+  function removeMeal() {
+    updateCore({ ...core, diet: { ...core.diet, meals: core.diet.meals.filter((m) => m.id !== meal.id) } });
+  }
+
+  const options = meal.options || [{ id: "opt_default", items: [] }];
+  const mealTotal = optionMacros(options[0]);
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14 }}>{meal.name}</div>
+          {meal.time && <div style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{meal.time}</div>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: T.coral }}>{mealTotal.kcal.toFixed(0)} kcal (ref.)</span>
+          <button onClick={removeMeal} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}>
+            remover refeição
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+        {options.map((opt, i) => (
+          <MealOption
+            key={opt.id}
+            meal={meal}
+            option={opt}
+            optIndex={i}
+            core={core}
+            updateCore={updateCore}
+            canRemove={options.length > 1}
+          />
+        ))}
+      </div>
+
+      <Btn variant="ghost" onClick={addOption} style={{ fontSize: 12, marginBottom: 12 }}>
+        + Adicionar opção
+      </Btn>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div>
+          <Label>Substituições equivalentes</Label>
+          <TextArea
+            rows={2}
+            placeholder='Ex: 180g arroz cozido ⇄ 280g aipim ⇄ 250g batata inglesa'
+            value={meal.substitutionsText || ""}
+            onChange={(e) => updateMeal((m) => ({ ...m, substitutionsText: e.target.value }))}
+            style={{ fontSize: 12.5 }}
+          />
+        </div>
+        <div>
+          <Label>Regra prática / observação para esta refeição</Label>
+          <TextArea
+            rows={2}
+            placeholder="Ex: se não descer o arroz todo, completa com suco de uva integral 200ml"
+            value={meal.note || ""}
+            onChange={(e) => updateMeal((m) => ({ ...m, note: e.target.value }))}
+            style={{ fontSize: 12.5 }}
+          />
+        </div>
       </div>
     </Card>
   );
@@ -4108,20 +4267,42 @@ function Nutricao({ core, updateCore, profile }) {
 
   function addMeal() {
     if (!newMealName.trim()) return;
-    const meal = { id: "meal_" + Date.now(), name: newMealName.trim(), time: newMealTime, items: [] };
+    const meal = {
+      id: "meal_" + Date.now(),
+      name: newMealName.trim(),
+      time: newMealTime,
+      options: [{ id: "opt_" + Date.now(), items: [] }],
+      substitutionsText: "",
+      note: "",
+    };
     updateDiet({ meals: [...diet.meals, meal] });
     setNewMealName("");
     setNewMealTime("");
   }
 
-  function suggestTargets() {
+  const [suggestingTargets, setSuggestingTargets] = useState(false);
+  const [suggestError, setSuggestError] = useState("");
+
+  function trainingsLast7Days() {
+    return (core.trainings || []).filter((t) => {
+      const d = daysUntil(t.date);
+      return d <= 0 && d >= -6;
+    }).length;
+  }
+
+  function suggestTargetsFromWeight() {
     const w = parseFloat((profile.weight || "0").replace(",", "."));
     const h = parseFloat((profile.height || "0").replace(",", "."));
     const age = calcAge(profile.birthDate) || 30;
-    if (!w || !h) return;
-    // Mifflin-St Jeor
+    if (!w || !h) {
+      setSuggestError("Preencha peso e altura no cadastro do atleta para calcular.");
+      return;
+    }
+    setSuggestError("");
+    // Mifflin-St Jeor + fator de atividade calibrado pelo volume real de treino
     const bmr = profile.sex === "Feminino" ? 10 * w + 6.25 * h * 100 - 5 * age - 161 : 10 * w + 6.25 * h * 100 - 5 * age + 5;
-    const activityFactor = 1.6; // atleta em treino regular
+    const sessions = trainingsLast7Days();
+    const activityFactor = sessions >= 6 ? 1.75 : sessions >= 4 ? 1.6 : sessions >= 2 ? 1.45 : 1.3;
     const tdee = bmr * activityFactor;
     const protein = w * 1.8;
     const fat = w * 0.9;
@@ -4136,11 +4317,63 @@ function Nutricao({ core, updateCore, profile }) {
     });
   }
 
+  async function suggestTargetsFromEvolution() {
+    const assessments = core.bodyAssessments || [];
+    if (assessments.length === 0) {
+      setSuggestError(
+        "Sem avaliação corporal cadastrada ainda — faça uma em Evolução física primeiro, ou use a opção por peso/altura."
+      );
+      return;
+    }
+    setSuggestingTargets(true);
+    setSuggestError("");
+    try {
+      const sorted = [...assessments].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const sessions = trainingsLast7Days();
+      const system = `Você é nutricionista esportivo. Com base na evolução da composição corporal e no volume de treino recente do atleta, sugira metas diárias de calorias e macros que façam sentido pra fase atual dele (ex: se está perdendo gordura de forma consistente e o treino está bom, manter direção; se estagnado, ajustar). Responda APENAS com um objeto JSON compacto, sem texto antes ou depois: {"kcal":numero,"protein":numero,"carb":numero,"fat":numero}.`;
+      const userMsg = `Atleta: ${profile.name}, ${profile.sex || "sexo não informado"}, peso atual ${profile.weight || "?"}kg, altura ${profile.height || "?"}m.
+Evolução corporal: primeira avaliação (${String(first.date).slice(0, 10)}) — peso ${first.weight ?? "?"}kg, %gordura ${first.fatPercent ?? "?"}%; avaliação mais recente (${String(last.date).slice(0, 10)}) — peso ${last.weight ?? "?"}kg, %gordura ${last.fatPercent ?? "?"}%.
+Treinos na última semana: ${sessions} sessões. Modalidades praticadas: ${modalitiesSummary(core)}.`;
+
+      const { text } = await callClaude({ system, messages: [{ role: "user", content: userMsg }], maxTokens: 300 });
+      const parsed = extractJsonObject(text);
+      updateDiet({
+        targetKcal: String(Math.round(parsed.kcal || 0)),
+        targetProtein: String(Math.round(parsed.protein || 0)),
+        targetCarb: String(Math.round(parsed.carb || 0)),
+        targetFat: String(Math.round(parsed.fat || 0)),
+      });
+    } catch (e) {
+      setSuggestError(`Não consegui calcular agora${e && e.message ? ` (${e.message})` : ""}. Tente novamente.`);
+    } finally {
+      setSuggestingTargets(false);
+    }
+  }
+
   async function generateWithAI() {
     setGenerating(true);
     setGenError("");
     try {
-      const system = `Você é nutricionista esportivo. Monte um dia alimentar completo (café da manhã, almoço, lanche da tarde, jantar, e ceia se fizer sentido) usando alimentos comuns do dia a dia brasileiro, com nomes de alimentos SIMPLES e genéricos no padrão da tabela TACO (ex: "Arroz, tipo 1, cozido", "Frango, peito, sem pele, grelhado", "Banana, prata", "Ovo, de galinha, inteiro, cozido", "Feijão, carioca, cozido", "Batata-doce, cozida", "Pão, francês"). Respeite as metas diárias de calorias e macros informadas, se houver. Respeite rigorosamente a rotina, os horários, o que o atleta gosta e não gosta de comer, e as preferências de paladar informadas — nunca inclua algo que ele disse que não come. Considere a suplementação em uso ao montar o plano (não duplique nutrientes já cobertos por suplementos informados). Responda APENAS com um array JSON compacto, sem texto antes ou depois, sem markdown, no formato: [{"meal":"Café da manhã","time":"07:00","items":[{"food":"Pão, francês","grams":50}]}]. Use gramas realistas.`;
+      const nextGoal = [...core.goals]
+        .filter((g) => daysUntil(g.targetDate) >= 0)
+        .sort((a, b) => daysUntil(a.targetDate) - daysUntil(b.targetDate))[0];
+
+      const system = `Você é o Dr. Maurício Buratto, nutricionista clínico e esportivo (CRN10-8588), montando um planejamento alimentar no seu padrão real de prescrição. Siga rigorosamente este formato, que é a sua metodologia:
+
+1) Café da manhã, almoço, lanche(s), jantar e ceia (se fizer sentido) — no máximo 6 refeições/janelas no total. Se o atleta tiver prova/jogo cadastrado e a modalidade for de campo/quadra, pode incluir 1-2 janelas extras de pré/pós-prova em vez de um lanche comum, respeitando o limite de 6.
+2) Cada refeição tem 2 opções (às vezes mais, mas gere 2 para caber na resposta), cada uma com alimentos SIMPLES em gramas exatas, no padrão da tabela TACO (ex: "Arroz, tipo 1, cozido", "Frango, peito, sem pele, grelhado", "Ovo, de galinha, inteiro, cozido", "Batata-doce, cozida", "Pão, francês"). As opções de uma mesma refeição devem ser nutricionalmente próximas entre si (proteína/energia parecidas), não aleatórias.
+3) Ao final de cada refeição, escreva uma linha curta de "substituições equivalentes" no formato "X g de A ⇄ Y g de B ⇄ Z g de C", com os gramas ajustados pra ficarem nutricionalmente equivalentes (não é só trocar o alimento, é recalcular a quantidade).
+4) Quando fizer sentido, adicione UMA observação prática curta e pessoal por refeição (regra de bolso, comportamental, ligada ao contexto do atleta — ex: o que fazer se não conseguir comer tudo, ajuste em dia de treino/prova, atenção a efeito colateral de medicação). Nem toda refeição precisa de observação — só inclua quando agregar de verdade.
+5) Se o atleta mencionar uso de medicação para emagrecimento (GLP-1, tirzepatida, Mounjaro, Ozempic), considere efeitos colaterais comuns (náusea, saciedade precoce, risco de desidratação) nas observações e proteína como "rede de segurança" via whey nos dias de pouco apetite.
+6) Depois das refeições, sugira de 3 a 5 itens de suplementação, cada um com dose, horário, e uma frase curta do PORQUÊ desse suplemento fazer sentido pra ESTE atleta especificamente (objetivo, queixa, contexto) — nunca genérico.
+7) Feche com uma frase curta e realista de resultado esperado, coerente com o objetivo do atleta.
+Tom: direto, pessoal, como se estivesse escrevendo pro próprio paciente — pode tratar por "tu" ou "você".
+
+Responda APENAS com um objeto JSON compacto, sem texto antes ou depois, sem markdown, no formato exato:
+{"meals":[{"m":"Café da manhã","t":"07:00","o":[[{"f":"Pão, francês","g":50}],[{"f":"Tapioca","g":90}]],"s":"1 pão francês ⇄ 220g cuscuz ⇄ 90g tapioca","n":"observação curta ou null"}],"sup":[{"n":"Creatina monohidratada","d":"5g","t":"café da manhã","w":"porque curto"}],"exp":"frase curta de resultado esperado"}
+Seja extremamente econômico em texto — isso é crítico, a resposta tem limite curto de tamanho.`;
 
       const q = questionnaire;
       const questionnaireLines = [
@@ -4155,32 +4388,46 @@ function Nutricao({ core, updateCore, profile }) {
         .filter(Boolean)
         .join("\n");
 
-      const userMsg = `Atleta: ${profile.name}, ${profile.sex || "sexo não informado"}, peso ${profile.weight || "?"}kg, altura ${profile.height || "?"}m, modalidade ${profile.modality}, nível ${profile.level}.
+      const userMsg = `Atleta: ${profile.name}, ${profile.sex || "sexo não informado"}, peso ${profile.weight || "?"}kg, altura ${profile.height || "?"}m, modalidades: ${modalitiesSummary(core)}, nível ${profile.level}.
 ${diet.targetKcal ? `Meta diária: ${diet.targetKcal}kcal, proteína ${diet.targetProtein}g, carboidrato ${diet.targetCarb}g, gordura ${diet.targetFat}g.` : "Sem meta de macros definida — monte algo equilibrado para um atleta desse perfil."}
+${nextGoal ? `Próxima prova/jogo: ${nextGoal.title} em ${nextGoal.targetDate}${nextGoal.targetMetric ? `, alvo: ${nextGoal.targetMetric}` : ""}.` : "Sem prova/jogo cadastrado."}
 ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (respeite rigorosamente, principalmente o que ele não gosta/não come):\n${questionnaireLines}` : "Sem informações adicionais de rotina/preferências — monte algo genérico e equilibrado."}`;
 
       const { text } = await callClaude({ system, messages: [{ role: "user", content: userMsg }], maxTokens: 1000 });
-      const parsed = extractJsonArray(text);
+      const parsed = extractJsonObject(text);
 
-      const meals = parsed.map((m) => ({
+      const matchFood = (it) => {
+        const match = matchTacoFood(it.f);
+        return {
+          id: "it_" + Math.random().toString(36).slice(2),
+          name: match ? match.name : `${it.f} (sem correspondência exata na TACO)`,
+          grams: it.g || 100,
+          kcalPer100: match ? match.kcal || 0 : 0,
+          proteinPer100: match ? match.protein || 0 : 0,
+          carbPer100: match ? match.carb || 0 : 0,
+          fatPer100: match ? match.lipids || 0 : 0,
+        };
+      };
+
+      const meals = (parsed.meals || []).map((m) => ({
         id: "meal_" + Math.random().toString(36).slice(2),
-        name: m.meal,
-        time: m.time || "",
-        items: (m.items || []).map((it) => {
-          const match = matchTacoFood(it.food);
-          return {
-            id: "it_" + Math.random().toString(36).slice(2),
-            name: match ? match.name : `${it.food} (sem correspondência exata na TACO)`,
-            grams: it.grams || 100,
-            kcalPer100: match ? match.kcal || 0 : 0,
-            proteinPer100: match ? match.protein || 0 : 0,
-            carbPer100: match ? match.carb || 0 : 0,
-            fatPer100: match ? match.lipids || 0 : 0,
-          };
-        }),
+        name: m.m,
+        time: m.t || "",
+        options: (m.o || []).map((opt) => ({
+          id: "opt_" + Math.random().toString(36).slice(2),
+          items: (opt || []).map(matchFood),
+        })),
+        substitutionsText: m.s || "",
+        note: m.n || "",
       }));
 
-      updateDiet({ meals });
+      updateDiet({
+        meals,
+        supplementNotes: (parsed.sup || [])
+          .map((s) => `${s.n} — ${s.d}, ${s.t}${s.w ? ` (${s.w})` : ""}`)
+          .join("\n"),
+        expectedResult: parsed.exp || "",
+      });
     } catch (e) {
       console.error(e);
       setGenError(`Não consegui gerar a sugestão agora${e && e.message ? ` (${e.message})` : ""}. Tente novamente.`);
@@ -4198,7 +4445,7 @@ ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <Card style={{ background: `linear-gradient(135deg, ${T.surfaceAlt}, ${T.surface})` }}>
-        <Label>Totais do dia</Label>
+        <Label>Totais do dia (Opção 1 de cada refeição)</Label>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
           <MacroBar label="Calorias" value={totals.kcal} target={targetKcal} color={T.coral} unit="kcal" />
           <MacroBar label="Proteína" value={totals.protein} target={targetProtein} color={T.gold} unit="g" />
@@ -4210,8 +4457,7 @@ ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (
       <Card>
         <Label>Metas diárias</Label>
         <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
-          Defina manualmente ou gere uma sugestão de ponto de partida com base no peso, altura, idade e sexo do atleta
-          (fórmula de Mifflin-St Jeor + fator de atividade para treino regular).
+          Defina manualmente ou gere uma sugestão de ponto de partida.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
           <Input placeholder="Kcal/dia" value={diet.targetKcal} onChange={(e) => updateDiet({ targetKcal: e.target.value })} />
@@ -4219,11 +4465,15 @@ ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (
           <Input placeholder="Carboidrato (g)" value={diet.targetCarb} onChange={(e) => updateDiet({ targetCarb: e.target.value })} />
           <Input placeholder="Gordura (g)" value={diet.targetFat} onChange={(e) => updateDiet({ targetFat: e.target.value })} />
         </div>
-        <div style={{ marginTop: 10 }}>
-          <Btn variant="ghost" onClick={suggestTargets}>
-            Calcular sugestão automática
+        <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Btn variant="gold" onClick={suggestTargetsFromEvolution} disabled={suggestingTargets}>
+            {suggestingTargets ? "Calculando..." : "Calcular pela evolução física + treinos"}
+          </Btn>
+          <Btn variant="ghost" onClick={suggestTargetsFromWeight}>
+            Calcular por peso/altura + treinos
           </Btn>
         </div>
+        {suggestError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{suggestError}</div>}
       </Card>
 
       <Card>
@@ -4302,8 +4552,8 @@ ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (
           <div>
             <Label>Montar dieta com IA</Label>
             <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>
-              Gera um dia alimentar completo (substitui as refeições atuais), usando as respostas do questionário
-              acima e casando os alimentos com a base TACO sempre que possível.
+              Gera um planejamento no seu padrão real de prescrição (opções, substituições equivalentes, regras
+              práticas e suplementação com o porquê) — substitui as refeições atuais.
             </div>
           </div>
           <Btn variant="gold" onClick={generateWithAI} disabled={generating}>
@@ -4312,6 +4562,27 @@ ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (
         </div>
         {genError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{genError}</div>}
       </Card>
+
+      {(diet.supplementNotes || diet.expectedResult) && (
+        <Card>
+          {diet.supplementNotes && (
+            <div style={{ marginBottom: diet.expectedResult ? 14 : 0 }}>
+              <Label>Suplementação sugerida</Label>
+              <div style={{ fontFamily: "Inter", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", marginTop: 4 }}>
+                {diet.supplementNotes}
+              </div>
+            </div>
+          )}
+          {diet.expectedResult && (
+            <div>
+              <Label>Resultado esperado</Label>
+              <div style={{ fontFamily: "Inter", fontSize: 13, lineHeight: 1.6, color: T.textMuted, marginTop: 4 }}>
+                {diet.expectedResult}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card>
         <Label>Nova refeição</Label>
@@ -4342,8 +4613,88 @@ function Suplementos({ core, updateCore, profile }) {
   const [notes, setNotes] = useState("");
   const [sugLoading, setSugLoading] = useState(false);
   const [sugError, setSugError] = useState("");
+  const [remindersOn, setRemindersOn] = useState(false);
+  const [reminderError, setReminderError] = useState("");
+  const firedTodayRef = useRef(new Set());
 
   const suggestions = core.supplementSuggestions || [];
+
+  useEffect(() => {
+    if (!remindersOn) return;
+    const interval = setInterval(() => {
+      const now = new Date();
+      const nowStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const todayKey = now.toISOString().slice(0, 10);
+      core.supplements.forEach((s) => {
+        if (s.time === nowStr) {
+          const fireKey = `${todayKey}_${s.id}`;
+          if (!firedTodayRef.current.has(fireKey)) {
+            firedTodayRef.current.add(fireKey);
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              new Notification("Hora do suplemento — Pulso", {
+                body: `${s.name}${s.notes ? " — " + s.notes : ""}`,
+              });
+            }
+          }
+        }
+      });
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [remindersOn, core.supplements]);
+
+  async function enableBrowserReminders() {
+    if (typeof Notification === "undefined") {
+      setReminderError("Este navegador não suporta notificações.");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      setRemindersOn(true);
+      setReminderError("");
+    } else {
+      setReminderError("Permissão de notificação negada — habilite nas configurações do navegador pra ativar.");
+    }
+  }
+
+  function escapeICS(text) {
+    return String(text || "").replace(/[\\,;]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+  }
+
+  function downloadICS() {
+    if (core.supplements.length === 0) {
+      setReminderError("Cadastre pelo menos um suplemento com horário antes de exportar.");
+      return;
+    }
+    setReminderError("");
+    const pad = (n) => String(n).padStart(2, "0");
+    const now = new Date();
+    const dtstamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+    const todayStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Pulso//Suplementos//PT\r\nCALSCALE:GREGORIAN\r\n";
+    core.supplements.forEach((s) => {
+      const [hh, mm] = (s.time || "08:00").split(":");
+      ics += "BEGIN:VEVENT\r\n";
+      ics += `UID:supp-${s.id}@pulso.app\r\n`;
+      ics += `DTSTAMP:${dtstamp}\r\n`;
+      ics += `DTSTART:${todayStr}T${hh}${mm}00\r\n`;
+      ics += "DURATION:PT10M\r\n";
+      ics += "RRULE:FREQ=DAILY\r\n";
+      ics += `SUMMARY:Tomar ${escapeICS(s.name)}\r\n`;
+      if (s.notes) ics += `DESCRIPTION:${escapeICS(s.notes)}\r\n`;
+      ics += "BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Lembrete Pulso\r\nTRIGGER:PT0M\r\nEND:VALARM\r\n";
+      ics += "END:VEVENT\r\n";
+    });
+    ics += "END:VCALENDAR\r\n";
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pulso-suplementos.ics";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   function add() {
     if (!name.trim()) return;
@@ -4369,7 +4720,7 @@ function Suplementos({ core, updateCore, profile }) {
 
       const system = `Você é nutricionista esportivo. Sugira suplementação esportiva de uso comum e legal (nada de substâncias controladas) para um atleta, organizada em duas partes com rótulos simples "Preparação:" e "Dia da prova:". Em "Preparação", cubra as semanas antes da prova (ex: hidratação, carboidrato, eletrólitos, ferro/vitamina D se pertinente ao contexto, cafeína em treinos-chave). Em "Dia da prova", cubra antes, durante e depois (ex: refeição pré-prova, carboidrato/gel durante, reposição de eletrólitos, recuperação pós-prova). Escreva em português do Brasil, texto corrido direto, sem markdown pesado, no máximo 4 parágrafos curtos no total. Finalize com uma frase deixando claro que as doses devem ser individualizadas por um nutricionista, considerando o histórico e exames do atleta.`;
 
-      const userMsg = `Atleta: ${profile.name}, modalidade ${profile.modality}, nível ${profile.level}.
+      const userMsg = `Atleta: ${profile.name}, modalidades: ${modalitiesSummary(core)}, nível ${profile.level}.
 Prova/meta: ${nextGoal ? `${nextGoal.title} em ${nextGoal.targetDate}, tipo: ${nextGoal.competitionType || "—"}, alvo: ${nextGoal.targetMetric || "não especificado"}` : "nenhuma prova cadastrada — sugerir suplementação geral de preparação e de dia de treino/competição típica da modalidade"}`;
 
       const { text } = await callClaude({
@@ -4397,6 +4748,25 @@ Prova/meta: ${nextGoal ? `${nextGoal.title} em ${nextGoal.targetDate}, tipo: ${n
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Card>
+        <Label>Lembretes</Label>
+        <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+          Um app web não consegue criar um alarme nativo do celular sozinho. Duas formas reais de lembrar:{" "}
+          <strong style={{ color: T.textPrimary }}>notificação no navegador</strong> (funciona enquanto o Pulso
+          estiver aberto) ou <strong style={{ color: T.textPrimary }}>exportar pro Calendário/Lembretes</strong> do
+          seu celular (funciona mesmo com o app fechado, tocando som normalmente).
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Btn variant={remindersOn ? "ghost" : "gold"} onClick={enableBrowserReminders} disabled={remindersOn}>
+            {remindersOn ? "Notificações ativadas ✓" : "Ativar notificações no navegador"}
+          </Btn>
+          <Btn variant="ghost" onClick={downloadICS}>
+            Baixar lembretes para o Calendário (.ics)
+          </Btn>
+        </div>
+        {reminderError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{reminderError}</div>}
+      </Card>
+
       <Card style={{ background: `linear-gradient(135deg, ${T.surfaceAlt}, ${T.surface})`, borderColor: T.gold + "33" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
@@ -4513,10 +4883,19 @@ function AnaliseIA({ core, updateCore, profile }) {
         effort: t.effort,
       }));
 
-      const system = `Você é um treinador esportivo experiente analisando o retrospecto de treino de um atleta. Escreva em português do Brasil, em texto corrido (sem markdown, sem títulos numerados), direto e objetivo, em 3 a 5 parágrafos curtos. Avalie se o atleta está evoluindo, estagnado ou regredindo, apontando com base em quais dados (volume, intensidade, consistência, frequência) chegou a essa conclusão. Se os dados forem insuficientes para alguma conclusão, diga isso claramente em vez de inventar. Termine com 1-2 recomendações práticas.`;
+      const assessments = [...(core.bodyAssessments || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const bodyEvolutionLine =
+        assessments.length > 0
+          ? `Evolução física registrada (da mais antiga pra mais recente): ${assessments
+              .map((a) => `${String(a.date).slice(0, 10)}: peso ${a.weight ?? "?"}kg, %gordura ${a.fatPercent ?? "?"}%`)
+              .join(" | ")}.`
+          : "Sem avaliação de composição corporal cadastrada — baseie a análise só nos dados de treino abastecidos.";
 
-      const userMsg = `Atleta: ${profile.name}, modalidade ${profile.modality}, nível ${profile.level}.
+      const system = `Você é um treinador esportivo experiente analisando o retrospecto de um atleta. Escreva em português do Brasil, em texto corrido (sem markdown, sem títulos numerados), direto e objetivo, em 3 a 5 parágrafos curtos. Avalie se o atleta está evoluindo, estagnado ou regredindo, apontando com base em quais dados (volume, intensidade, consistência, frequência) chegou a essa conclusão. Se houver dados de composição corporal, CORRELACIONE a evolução física com a evolução do treino (ex: se o volume/consistência de treino subiu junto com queda de %gordura, ou se o treino caiu e o peso subiu junto — aponte essa relação explicitamente). Se não houver avaliação corporal cadastrada, analise só com base nos dados de treino disponíveis, sem inventar dados de composição corporal. Se os dados forem insuficientes para alguma conclusão, diga isso claramente em vez de inventar. Termine com 1-2 recomendações práticas.`;
+
+      const userMsg = `Atleta: ${profile.name}, modalidades: ${modalitiesSummary(core)}, nível ${profile.level}.
 Meta atual: ${nextGoal ? `${nextGoal.title} em ${nextGoal.targetDate}` : "nenhuma cadastrada"}.
+${bodyEvolutionLine}
 Histórico de treinos (mais recente primeiro): ${JSON.stringify(recent)}`;
 
       const { text } = await callClaude({
@@ -4600,7 +4979,7 @@ function Relatorios({ core, updateCore, profile }) {
 
       const system = `Você escreve relatórios curtos de treino para um atleta, em português do Brasil, texto corrido sem markdown, tom direto e motivador mas honesto (sem exagero). Relatório ${kind === "daily" ? "diário" : "semanal"}: resuma o que foi feito, destaque pontos positivos e pontos de atenção, e feche com uma frase objetiva sobre o próximo passo. Máximo 2 parágrafos curtos.`;
 
-      const userMsg = `Atleta: ${profile.name}, ${profile.modality}, nível ${profile.level}.
+      const userMsg = `Atleta: ${profile.name}, modalidades: ${modalitiesSummary(core)}, nível ${profile.level}.
 Período: últimos ${windowDays} dia(s).
 Treinos no período: ${JSON.stringify(
         trainings.map((t) => ({ date: t.date, type: t.type, duration: t.duration, distance: t.distance, effort: t.effort }))
