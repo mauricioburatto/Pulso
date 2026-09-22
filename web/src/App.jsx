@@ -1446,31 +1446,59 @@ function Dashboard({ core, profile }) {
    METAS & PROVAS
 ============================================================= */
 function Metas({ core, updateCore }) {
+  const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [metric, setMetric] = useState("");
   const [type, setType] = useState("Competição");
   const [notes, setNotes] = useState("");
 
-  function addGoal() {
-    if (!title.trim() || !date) return;
-    const goal = {
-      id: "g_" + Date.now(),
-      title: title.trim(),
-      targetDate: date,
-      targetMetric: metric.trim(),
-      competitionType: type,
-      notes: notes.trim(),
-    };
-    updateCore({ ...core, goals: [...core.goals, goal] });
+  function resetForm() {
+    setEditingId(null);
     setTitle("");
     setDate("");
     setMetric("");
+    setType("Competição");
     setNotes("");
+  }
+
+  function startEdit(g) {
+    setEditingId(g.id);
+    setTitle(g.title);
+    setDate(g.targetDate);
+    setMetric(g.targetMetric || "");
+    setType(g.competitionType || "Competição");
+    setNotes(g.notes || "");
+  }
+
+  function saveGoal() {
+    if (!title.trim() || !date) return;
+    if (editingId) {
+      updateCore({
+        ...core,
+        goals: core.goals.map((g) =>
+          g.id === editingId
+            ? { ...g, title: title.trim(), targetDate: date, targetMetric: metric.trim(), competitionType: type, notes: notes.trim() }
+            : g
+        ),
+      });
+    } else {
+      const goal = {
+        id: "g_" + Date.now(),
+        title: title.trim(),
+        targetDate: date,
+        targetMetric: metric.trim(),
+        competitionType: type,
+        notes: notes.trim(),
+      };
+      updateCore({ ...core, goals: [...core.goals, goal] });
+    }
+    resetForm();
   }
 
   function removeGoal(id) {
     updateCore({ ...core, goals: core.goals.filter((g) => g.id !== id) });
+    if (editingId === id) resetForm();
   }
 
   const sorted = [...core.goals].sort(
@@ -1480,7 +1508,7 @@ function Metas({ core, updateCore }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <Card>
-        <Label>Nova meta ou competição</Label>
+        <Label>{editingId ? "Editar meta ou competição" : "Nova meta ou competição"}</Label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Input placeholder="Título (ex: Meia Maratona de Floripa)" value={title} onChange={(e) => setTitle(e.target.value)} />
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -1494,10 +1522,15 @@ function Metas({ core, updateCore }) {
         <div style={{ marginTop: 10 }}>
           <TextArea rows={2} placeholder="Observações (contexto, intenção)" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <div style={{ marginTop: 10 }}>
-          <Btn variant="primary" onClick={addGoal} disabled={!title.trim() || !date}>
-            Adicionar
+        <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+          <Btn variant="primary" onClick={saveGoal} disabled={!title.trim() || !date}>
+            {editingId ? "Salvar alterações" : "Adicionar"}
           </Btn>
+          {editingId && (
+            <Btn variant="ghost" onClick={resetForm}>
+              Cancelar
+            </Btn>
+          )}
         </div>
       </Card>
 
@@ -1526,9 +1559,14 @@ function Metas({ core, updateCore }) {
                     </div>
                   )}
                 </div>
-                <Btn variant="danger" onClick={() => removeGoal(g.id)} style={{ height: 32 }}>
-                  remover
-                </Btn>
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                  <Btn variant="ghost" onClick={() => startEdit(g)} style={{ height: 32 }}>
+                    editar
+                  </Btn>
+                  <Btn variant="danger" onClick={() => removeGoal(g.id)} style={{ height: 32 }}>
+                    remover
+                  </Btn>
+                </div>
               </Card>
             );
           })
