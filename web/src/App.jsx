@@ -1303,7 +1303,27 @@ function daysUntil(dateStr) {
   return Math.round((d - now) / 86400000);
 }
 
-function Dashboard({ core, profile }) {
+function TrendTag({ delta, neutral }) {
+  if (delta === null) return null;
+  const rounded = Math.round(delta * 10) / 10;
+  if (rounded === 0) {
+    return (
+      <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted, marginLeft: 8 }}>
+        — igual à semana anterior
+      </span>
+    );
+  }
+  const up = rounded > 0;
+  const color = neutral ? T.textMuted : up ? T.good : T.danger;
+  return (
+    <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color, marginLeft: 8 }}>
+      {up ? "▲" : "▼"} {up ? "+" : ""}
+      {rounded} vs. semana anterior
+    </span>
+  );
+}
+
+function Dashboard({ core, profile, onNavigate }) {
   const nextGoal = [...core.goals]
     .filter((g) => daysUntil(g.targetDate) >= 0)
     .sort((a, b) => daysUntil(a.targetDate) - daysUntil(b.targetDate))[0];
@@ -1313,8 +1333,14 @@ function Dashboard({ core, profile }) {
       const d = (Date.now() - new Date(t.date).getTime()) / 86400000;
       return d >= 0 && d <= 7;
     });
+  const prev7 = core.trainings.filter((t) => {
+    const d = (Date.now() - new Date(t.date).getTime()) / 86400000;
+    return d > 7 && d <= 14;
+  });
+  const hasPrevData = prev7.length > 0;
 
   const totalDuration = last7.reduce((s, t) => s + (Number(t.duration) || 0), 0);
+  const prevDuration = prev7.reduce((s, t) => s + (Number(t.duration) || 0), 0);
   const distanceRelevant = last7.filter((t) => {
     const ty = (t.type || "").toLowerCase();
     return (
@@ -1326,8 +1352,12 @@ function Dashboard({ core, profile }) {
   const showDistance = distanceRelevant.length > 0;
   const avgEffort =
     last7.length > 0
-      ? (last7.reduce((s, t) => s + (Number(t.effort) || 0), 0) / last7.length).toFixed(1)
-      : "—";
+      ? last7.reduce((s, t) => s + (Number(t.effort) || 0), 0) / last7.length
+      : null;
+  const prevAvgEffort =
+    prev7.length > 0
+      ? prev7.reduce((s, t) => s + (Number(t.effort) || 0), 0) / prev7.length
+      : null;
 
   const upcomingPlanned = core.plannedWorkouts
     .filter((w) => daysUntil(w.date) >= 0)
@@ -1368,10 +1398,19 @@ function Dashboard({ core, profile }) {
             </div>
           </div>
         ) : (
-          <EmptyState
-            title="Nenhuma prova cadastrada"
-            hint='Cadastre uma meta ou competição na aba "Metas & Provas" para ver a contagem regressiva aqui.'
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <EmptyState
+              title="Nenhuma prova cadastrada"
+              hint="Cadastre uma meta ou competição para ver a contagem regressiva aqui."
+            />
+            {onNavigate && (
+              <div>
+                <Btn variant="gold" onClick={() => onNavigate("metas")}>
+                  Cadastrar meta ou prova
+                </Btn>
+              </div>
+            )}
+          </div>
         )}
       </Card>
 
@@ -1385,10 +1424,26 @@ function Dashboard({ core, profile }) {
         }}
       >
         {[
-          { label: "Treinos (7 dias)", value: last7.length, unit: "sessões" },
-          { label: "Duração total", value: totalDuration, unit: "min" },
-          ...(showDistance ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km" }] : []),
-          { label: "PSE médio", value: avgEffort, unit: "/10" },
+          {
+            label: "Treinos (7 dias)",
+            value: last7.length,
+            unit: "sessões",
+            trend: hasPrevData ? last7.length - prev7.length : null,
+          },
+          {
+            label: "Duração total",
+            value: totalDuration,
+            unit: "min",
+            trend: hasPrevData ? totalDuration - prevDuration : null,
+          },
+          ...(showDistance ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km", trend: null }] : []),
+          {
+            label: "PSE médio",
+            value: avgEffort !== null ? avgEffort.toFixed(1) : "—",
+            unit: "/10",
+            trend: avgEffort !== null && prevAvgEffort !== null ? avgEffort - prevAvgEffort : null,
+            neutral: true,
+          },
         ].map((s) => (
           <Card key={s.label} style={{ padding: 14 }}>
             <Label>{s.label}</Label>
@@ -1398,6 +1453,7 @@ function Dashboard({ core, profile }) {
                 {s.unit}
               </span>
             </div>
+            <TrendTag delta={s.trend} neutral={s.neutral} />
           </Card>
         ))}
       </div>
@@ -1405,10 +1461,19 @@ function Dashboard({ core, profile }) {
       <Card>
         <Label>Próximos treinos programados</Label>
         {upcomingPlanned.length === 0 ? (
-          <EmptyState
-            title="Sem treinos programados"
-            hint='Gere uma rotina de treino automática na aba "Treinos".'
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <EmptyState
+              title="Sem treinos programados"
+              hint="Gere uma rotina de treino automática ou registre um treino manualmente."
+            />
+            {onNavigate && (
+              <div>
+                <Btn variant="ghost" onClick={() => onNavigate("treinos")}>
+                  Ir para Treinos
+                </Btn>
+              </div>
+            )}
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
             {upcomingPlanned.map((w) => (
@@ -4925,7 +4990,7 @@ export default function App() {
 
   const content = (
     <>
-      {active === "dashboard" && <Dashboard core={core} profile={profile} />}
+      {active === "dashboard" && <Dashboard core={core} profile={profile} onNavigate={setActive} />}
       {active === "metas" && <Metas core={core} updateCore={updateCore} />}
       {active === "treinos" && <Treinos core={core} updateCore={updateCore} profile={profile} />}
       {active === "sincronia" && <Sincronia core={core} updateCore={updateCore} />}
