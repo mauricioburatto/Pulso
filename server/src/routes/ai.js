@@ -184,7 +184,7 @@ router.post(
 router.post(
   '/avaliacao-treino-atual',
   asyncRoute(async (req, res) => {
-    const { description, profile, fileKind, imageBase64, pdfBase64 } = req.body;
+    const { description, profile, modalidades, fileKind, imageBase64, pdfBase64 } = req.body;
     const hasFile = fileKind === 'image' ? !!imageBase64 : fileKind === 'pdf' ? !!pdfBase64 : false;
 
     if ((!description || !description.trim()) && !hasFile) {
@@ -204,7 +204,7 @@ router.post(
     }
     contentBlocks.push({
       type: 'text',
-      text: `Contexto do atleta: ${profile.name}, nível autodeclarado ${profile.level}, modalidade principal ${profile.modality}.`,
+      text: `Contexto do atleta: ${profile.name}, nível autodeclarado ${profile.level}, modalidades praticadas: ${modalidades || 'nenhuma modalidade cadastrada ainda'}.`,
     });
 
     if (hasFile) {
@@ -231,7 +231,7 @@ router.post(
 router.post(
   '/avaliacao-corporal',
   asyncRoute(async (req, res) => {
-    const { profile, frontImageBase64, sideImageBase64 } = req.body;
+    const { profile, modalidades, frontImageBase64, sideImageBase64 } = req.body;
     if (!frontImageBase64 || !sideImageBase64) {
       return res.status(400).json({ error: 'Envie as duas fotos (frente e lado) em base64.' });
     }
@@ -243,7 +243,7 @@ router.post(
 
     const system = `Você é um avaliador físico auxiliando uma leitura visual de composição corporal a partir de duas fotos (frente e lado direito), seguindo o protocolo padrão de aferição por bioimpedância visual. Use idade, sexo, peso e altura informados para calibrar a estimativa das medidas. Responda APENAS com um objeto JSON compacto, sem texto antes ou depois, sem markdown, no formato: {"fatPercent":número estimado de percentual de gordura (ex: 23.5),"waist":circunferência de cintura estimada em cm,"hip":circunferência de quadril estimada em cm,"arm":circunferência de braço em cm,"forearm":circunferência de antebraço em cm,"thigh":circunferência de coxa em cm,"calf":circunferência de panturrilha em cm,"muscleNote":"observação curta sobre massa muscular aparente","postureNote":"observação curta sobre postura/simetria, ou null","protocolIssues":"se as fotos não seguiram bem o protocolo (roupa larga, ângulo, iluminação, pose incorreta), descreva aqui objetivamente; caso contrário null"}. Todos os valores numéricos devem ser números, não strings.`;
 
-    const userMsg = `Atleta: ${profile.name}, ${age ? `${age} anos` : 'idade não informada'}, sexo ${profile.sex || 'não informado'}, peso ${profile.weight || '?'}kg, altura ${profile.height || '?'}m, modalidade ${profile.modality}, nível ${profile.level}.`;
+    const userMsg = `Atleta: ${profile.name}, ${age ? `${age} anos` : 'idade não informada'}, sexo ${profile.sex || 'não informado'}, peso ${profile.weight || '?'}kg, altura ${profile.height || '?'}m, modalidades: ${modalidades || 'nenhuma modalidade cadastrada ainda'}, nível ${profile.level}.`;
 
     const { text } = await callClaude({
       system,
@@ -272,7 +272,7 @@ router.post(
 router.post(
   '/gerar-dieta',
   asyncRoute(async (req, res) => {
-    const { profile, diet, questionnaire } = req.body;
+    const { profile, modalidades, diet, questionnaire, nextGoal } = req.body;
     if (!profile) {
       return res.status(400).json({ error: 'Campo "profile" é obrigatório.' });
     }
@@ -280,7 +280,20 @@ router.post(
     const d = diet || {};
     const q = questionnaire || {};
 
-    const system = `Você é nutricionista esportivo. Monte um dia alimentar completo (café da manhã, almoço, lanche da tarde, jantar, e ceia se fizer sentido) usando alimentos comuns do dia a dia brasileiro, com nomes de alimentos SIMPLES e genéricos no padrão da tabela TACO (ex: "Arroz, tipo 1, cozido", "Frango, peito, sem pele, grelhado", "Banana, prata", "Ovo, de galinha, inteiro, cozido", "Feijão, carioca, cozido", "Batata-doce, cozida", "Pão, francês"). Respeite as metas diárias de calorias e macros informadas, se houver. Respeite rigorosamente a rotina, os horários, o que o atleta gosta e não gosta de comer, e as preferências de paladar informadas — nunca inclua algo que ele disse que não come. Considere a suplementação em uso ao montar o plano (não duplique nutrientes já cobertos por suplementos informados). Responda APENAS com um array JSON compacto, sem texto antes ou depois, sem markdown, no formato: [{"meal":"Café da manhã","time":"07:00","items":[{"food":"Pão, francês","grams":50}]}]. Use gramas realistas.`;
+    const system = `Você é o Dr. Maurício Buratto, nutricionista clínico e esportivo (CRN10-8588), montando um planejamento alimentar no seu padrão real de prescrição. Siga rigorosamente este formato, que é a sua metodologia:
+
+1) Café da manhã, almoço, lanche(s), jantar e ceia (se fizer sentido) — no máximo 6 refeições/janelas no total. Se o atleta tiver prova/jogo cadastrado e a modalidade for de campo/quadra, pode incluir 1-2 janelas extras de pré/pós-prova em vez de um lanche comum, respeitando o limite de 6.
+2) Cada refeição tem 2 opções (às vezes mais, mas gere 2 para caber na resposta), cada uma com alimentos SIMPLES em gramas exatas, no padrão da tabela TACO (ex: "Arroz, tipo 1, cozido", "Frango, peito, sem pele, grelhado", "Ovo, de galinha, inteiro, cozido", "Batata-doce, cozida", "Pão, francês"). As opções de uma mesma refeição devem ser nutricionalmente próximas entre si (proteína/energia parecidas), não aleatórias.
+3) Ao final de cada refeição, escreva uma linha curta de "substituições equivalentes" no formato "X g de A ⇄ Y g de B ⇄ Z g de C", com os gramas ajustados pra ficarem nutricionalmente equivalentes (não é só trocar o alimento, é recalcular a quantidade).
+4) Quando fizer sentido, adicione UMA observação prática curta e pessoal por refeição (regra de bolso, comportamental, ligada ao contexto do atleta — ex: o que fazer se não conseguir comer tudo, ajuste em dia de treino/prova, atenção a efeito colateral de medicação). Nem toda refeição precisa de observação — só inclua quando agregar de verdade.
+5) Se o atleta mencionar uso de medicação para emagrecimento (GLP-1, tirzepatida, Mounjaro, Ozempic), considere efeitos colaterais comuns (náusea, saciedade precoce, risco de desidratação) nas observações e proteína como "rede de segurança" via whey nos dias de pouco apetite.
+6) Depois das refeições, sugira de 3 a 5 itens de suplementação, cada um com dose, horário, e uma frase curta do PORQUÊ desse suplemento fazer sentido pra ESTE atleta especificamente (objetivo, queixa, contexto) — nunca genérico.
+7) Feche com uma frase curta e realista de resultado esperado, coerente com o objetivo do atleta.
+Tom: direto, pessoal, como se estivesse escrevendo pro próprio paciente — pode tratar por "tu" ou "você".
+
+Responda APENAS com um objeto JSON compacto, sem texto antes ou depois, sem markdown, no formato exato:
+{"meals":[{"m":"Café da manhã","t":"07:00","o":[[{"f":"Pão, francês","g":50}],[{"f":"Tapioca","g":90}]],"s":"1 pão francês ⇄ 220g cuscuz ⇄ 90g tapioca","n":"observação curta ou null"}],"sup":[{"n":"Creatina monohidratada","d":"5g","t":"café da manhã","w":"porque curto"}],"exp":"frase curta de resultado esperado"}
+Seja extremamente econômico em texto — isso é crítico, a resposta tem limite curto de tamanho.`;
 
     const questionnaireLines = [
       q.rotina && q.rotina.trim() ? `Rotina diária: ${q.rotina.trim()}` : '',
@@ -294,13 +307,37 @@ router.post(
       .filter(Boolean)
       .join('\n');
 
-    const userMsg = `Atleta: ${profile.name}, ${profile.sex || 'sexo não informado'}, peso ${profile.weight || '?'}kg, altura ${profile.height || '?'}m, modalidade ${profile.modality}, nível ${profile.level}.
+    const userMsg = `Atleta: ${profile.name}, ${profile.sex || 'sexo não informado'}, peso ${profile.weight || '?'}kg, altura ${profile.height || '?'}m, modalidades: ${modalidades || 'nenhuma modalidade cadastrada ainda'}, nível ${profile.level}.
 ${d.targetKcal ? `Meta diária: ${d.targetKcal}kcal, proteína ${d.targetProtein}g, carboidrato ${d.targetCarb}g, gordura ${d.targetFat}g.` : 'Sem meta de macros definida — monte algo equilibrado para um atleta desse perfil.'}
-${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (respeite rigorosamente, principalmente o que ele não gosta/não come):\n${questionnaireLines}` : 'Sem informações adicionais de rotina/preferências — monte algo genérico e equilibrado.'}`;
+${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (respeite rigorosamente, principalmente o que ele não gosta/não come):\n${questionnaireLines}` : 'Sem informações adicionais de rotina/preferências — monte algo genérico e equilibrado.'}
+${nextGoal ? `Próxima prova/jogo: ${nextGoal.title} em ${nextGoal.targetDate}${nextGoal.targetMetric ? `, alvo: ${nextGoal.targetMetric}` : ''}.` : 'Sem prova/jogo cadastrado.'}`;
 
     const { text } = await callClaude({ system, messages: [{ role: 'user', content: userMsg }], maxTokens: 1000 });
 
-    res.json({ meals: extractJsonArray(text) });
+    res.json(extractJsonObject(text));
+  })
+);
+
+/* ============================================================
+   Sugestão de metas nutricionais a partir da evolução física
+============================================================= */
+router.post(
+  '/sugerir-metas-evolucao',
+  asyncRoute(async (req, res) => {
+    const { profile, modalidades, firstAssessment, lastAssessment, trainingSessionsLast7Days } = req.body;
+    if (!profile || !firstAssessment || !lastAssessment) {
+      return res.status(400).json({ error: 'Campos "profile", "firstAssessment" e "lastAssessment" são obrigatórios.' });
+    }
+
+    const system = `Você é nutricionista esportivo. Com base na evolução da composição corporal e no volume de treino recente do atleta, sugira metas diárias de calorias e macros que façam sentido pra fase atual dele (ex: se está perdendo gordura de forma consistente e o treino está bom, manter direção; se estagnado, ajustar). Responda APENAS com um objeto JSON compacto, sem texto antes ou depois: {"kcal":numero,"protein":numero,"carb":numero,"fat":numero}.`;
+
+    const userMsg = `Atleta: ${profile.name}, ${profile.sex || 'sexo não informado'}, peso atual ${profile.weight || '?'}kg, altura ${profile.height || '?'}m.
+Evolução corporal: primeira avaliação (${String(firstAssessment.date).slice(0, 10)}) — peso ${firstAssessment.weight ?? '?'}kg, %gordura ${firstAssessment.fatPercent ?? '?'}%; avaliação mais recente (${String(lastAssessment.date).slice(0, 10)}) — peso ${lastAssessment.weight ?? '?'}kg, %gordura ${lastAssessment.fatPercent ?? '?'}%.
+Treinos na última semana: ${trainingSessionsLast7Days ?? 0} sessões. Modalidades praticadas: ${modalidades || 'nenhuma modalidade cadastrada ainda'}.`;
+
+    const { text } = await callClaude({ system, messages: [{ role: 'user', content: userMsg }], maxTokens: 300 });
+
+    res.json(extractJsonObject(text));
   })
 );
 
@@ -310,14 +347,14 @@ ${questionnaireLines ? `Informações do atleta sobre hábitos e preferências (
 router.post(
   '/sugestao-suplementacao',
   asyncRoute(async (req, res) => {
-    const { profile, nextGoal } = req.body;
+    const { profile, modalidades, nextGoal } = req.body;
     if (!profile) {
       return res.status(400).json({ error: 'Campo "profile" é obrigatório.' });
     }
 
     const system = `Você é nutricionista esportivo. Sugira suplementação esportiva de uso comum e legal (nada de substâncias controladas) para um atleta, organizada em duas partes com rótulos simples "Preparação:" e "Dia da prova:". Em "Preparação", cubra as semanas antes da prova (ex: hidratação, carboidrato, eletrólitos, ferro/vitamina D se pertinente ao contexto, cafeína em treinos-chave). Em "Dia da prova", cubra antes, durante e depois (ex: refeição pré-prova, carboidrato/gel durante, reposição de eletrólitos, recuperação pós-prova). Escreva em português do Brasil, texto corrido direto, sem markdown pesado, no máximo 4 parágrafos curtos no total. Finalize com uma frase deixando claro que as doses devem ser individualizadas por um nutricionista, considerando o histórico e exames do atleta.`;
 
-    const userMsg = `Atleta: ${profile.name}, modalidade ${profile.modality}, nível ${profile.level}.
+    const userMsg = `Atleta: ${profile.name}, modalidades: ${modalidades || 'nenhuma modalidade cadastrada ainda'}, nível ${profile.level}.
 Prova/meta: ${nextGoal ? `${nextGoal.title} em ${nextGoal.targetDate}, tipo: ${nextGoal.competitionType || '—'}, alvo: ${nextGoal.targetMetric || 'não especificado'}` : 'nenhuma prova cadastrada — sugerir suplementação geral de preparação e de dia de treino/competição típica da modalidade'}`;
 
     const { text } = await callClaude({
@@ -336,18 +373,27 @@ Prova/meta: ${nextGoal ? `${nextGoal.title} em ${nextGoal.targetDate}, tipo: ${n
 router.post(
   '/analise-evolucao',
   asyncRoute(async (req, res) => {
-    const { profile, nextGoal, recentTrainings } = req.body;
+    const { profile, modalidades, nextGoal, recentTrainings, bodyAssessments } = req.body;
     if (!profile) {
       return res.status(400).json({ error: 'Campo "profile" é obrigatório.' });
     }
 
     const recent = recentTrainings || [];
 
-    const system = `Você é um treinador esportivo experiente analisando o retrospecto de treino de um atleta. Escreva em português do Brasil, em texto corrido (sem markdown, sem títulos numerados), direto e objetivo, em 3 a 5 parágrafos curtos. Avalie se o atleta está evoluindo, estagnado ou regredindo, apontando com base em quais dados (volume, intensidade, consistência, frequência) chegou a essa conclusão. Se os dados forem insuficientes para alguma conclusão, diga isso claramente em vez de inventar. Termine com 1-2 recomendações práticas.`;
+    const assessments = [...(bodyAssessments || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const bodyEvolutionLine =
+      assessments.length > 0
+        ? `Evolução física registrada (da mais antiga pra mais recente): ${assessments
+            .map((a) => `${String(a.date).slice(0, 10)}: peso ${a.weight ?? '?'}kg, %gordura ${a.fatPercent ?? '?'}%`)
+            .join(' | ')}.`
+        : 'Sem avaliação de composição corporal cadastrada — baseie a análise só nos dados de treino abastecidos.';
 
-    const userMsg = `Atleta: ${profile.name}, modalidade ${profile.modality}, nível ${profile.level}.
+    const system = `Você é um treinador esportivo experiente analisando o retrospecto de um atleta. Escreva em português do Brasil, em texto corrido (sem markdown, sem títulos numerados), direto e objetivo, em 3 a 5 parágrafos curtos. Avalie se o atleta está evoluindo, estagnado ou regredindo, apontando com base em quais dados (volume, intensidade, consistência, frequência) chegou a essa conclusão. Se houver dados de composição corporal, CORRELACIONE a evolução física com a evolução do treino (ex: se o volume/consistência de treino subiu junto com queda de %gordura, ou se o treino caiu e o peso subiu junto — aponte essa relação explicitamente). Se não houver avaliação corporal cadastrada, analise só com base nos dados de treino disponíveis, sem inventar dados de composição corporal. Se os dados forem insuficientes para alguma conclusão, diga isso claramente em vez de inventar. Termine com 1-2 recomendações práticas.`;
+
+    const userMsg = `Atleta: ${profile.name}, modalidades: ${modalidades || 'nenhuma modalidade cadastrada ainda'}, nível ${profile.level}.
 Meta atual: ${nextGoal ? `${nextGoal.title} em ${nextGoal.targetDate}` : 'nenhuma cadastrada'}.
-Histórico de treinos (mais recente primeiro): ${JSON.stringify(recent)}`;
+Histórico de treinos (mais recente primeiro): ${JSON.stringify(recent)}
+${bodyEvolutionLine}`;
 
     const { text } = await callClaude({
       system,
@@ -365,7 +411,7 @@ Histórico de treinos (mais recente primeiro): ${JSON.stringify(recent)}`;
 router.post(
   '/relatorio',
   asyncRoute(async (req, res) => {
-    const { kind, profile, trainings, supplementNames } = req.body;
+    const { kind, profile, modalidades, trainings, supplementNames } = req.body;
     if (kind !== 'daily' && kind !== 'weekly') {
       return res.status(400).json({ error: 'Campo "kind" deve ser "daily" ou "weekly".' });
     }
@@ -377,7 +423,7 @@ router.post(
 
     const system = `Você escreve relatórios curtos de treino para um atleta, em português do Brasil, texto corrido sem markdown, tom direto e motivador mas honesto (sem exagero). Relatório ${kind === 'daily' ? 'diário' : 'semanal'}: resuma o que foi feito, destaque pontos positivos e pontos de atenção, e feche com uma frase objetiva sobre o próximo passo. Máximo 2 parágrafos curtos.`;
 
-    const userMsg = `Atleta: ${profile.name}, ${profile.modality}, nível ${profile.level}.
+    const userMsg = `Atleta: ${profile.name}, modalidades: ${modalidades || 'nenhuma modalidade cadastrada ainda'}, nível ${profile.level}.
 Período: últimos ${windowDays} dia(s).
 Treinos no período: ${JSON.stringify(trainings || [])}
 Suplementação programada: ${JSON.stringify(supplementNames || [])}`;

@@ -93,6 +93,7 @@ export const api = {
     avaliacaoTreinoAtual: (payload) => apiFetch('/ai/avaliacao-treino-atual', { method: 'POST', body: payload }),
     avaliacaoCorporal: (payload) => apiFetch('/ai/avaliacao-corporal', { method: 'POST', body: payload }),
     gerarDieta: (payload) => apiFetch('/ai/gerar-dieta', { method: 'POST', body: payload }),
+    sugerirMetasEvolucao: (payload) => apiFetch('/ai/sugerir-metas-evolucao', { method: 'POST', body: payload }),
     sugestaoSuplementacao: (payload) => apiFetch('/ai/sugestao-suplementacao', { method: 'POST', body: payload }),
     analiseEvolucao: (payload) => apiFetch('/ai/analise-evolucao', { method: 'POST', body: payload }),
     relatorio: (payload) => apiFetch('/ai/relatorio', { method: 'POST', body: payload }),
