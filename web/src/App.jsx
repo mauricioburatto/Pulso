@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users, MapPin } from "lucide-react";
 import { api, resolveMediaUrl, setUnauthorizedHandler } from "./api";
+import { startRouteTracking, routeDistanceKm, isNativePlatform } from "./geo";
 
 /* ============================================================
    DESIGN TOKENS
@@ -2057,6 +2058,70 @@ function Treinos({ core, updateCore, profile }) {
   const [weeks, setWeeks] = useState(2);
   const [copyMsg, setCopyMsg] = useState("");
 
+  const [gpsType, setGpsType] = useState("Corrida");
+  const [gpsTracking, setGpsTracking] = useState(false);
+  const [gpsError, setGpsError] = useState("");
+  const [gpsElapsedSec, setGpsElapsedSec] = useState(0);
+  const [gpsDistanceKm, setGpsDistanceKm] = useState(0);
+  const gpsPointsRef = useRef([]);
+  const gpsStopFnRef = useRef(null);
+  const gpsStartedAtRef = useRef(null);
+  const gpsTimerRef = useRef(null);
+
+  async function startGpsRecording() {
+    setGpsError("");
+    gpsPointsRef.current = [];
+    setGpsDistanceKm(0);
+    setGpsElapsedSec(0);
+    try {
+      gpsStopFnRef.current = await startRouteTracking((point) => {
+        gpsPointsRef.current = [...gpsPointsRef.current, point];
+        setGpsDistanceKm(routeDistanceKm(gpsPointsRef.current));
+      });
+      gpsStartedAtRef.current = Date.now();
+      gpsTimerRef.current = setInterval(() => {
+        setGpsElapsedSec(Math.round((Date.now() - gpsStartedAtRef.current) / 1000));
+      }, 1000);
+      setGpsTracking(true);
+    } catch (e) {
+      setGpsError(e && e.message ? e.message : "Não consegui acessar sua localização.");
+    }
+  }
+
+  async function stopGpsRecording(save) {
+    if (gpsStopFnRef.current) await gpsStopFnRef.current();
+    gpsStopFnRef.current = null;
+    if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
+    setGpsTracking(false);
+
+    if (save && gpsPointsRef.current.length > 1) {
+      const t = {
+        id: "tr_" + Date.now(),
+        source: "gps",
+        completed: true,
+        date: new Date().toISOString().slice(0, 10),
+        type: gpsType,
+        duration: String(Math.max(1, Math.round(gpsElapsedSec / 60))),
+        distance: gpsDistanceKm.toFixed(2),
+        hrAvg: "",
+        effort: "5",
+        notes: "",
+        route: gpsPointsRef.current,
+      };
+      updateCore({ ...core, trainings: [t, ...core.trainings] });
+    }
+    gpsPointsRef.current = [];
+    setGpsDistanceKm(0);
+    setGpsElapsedSec(0);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (gpsStopFnRef.current) gpsStopFnRef.current();
+      if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
+    };
+  }, []);
+
   const [isRecordingNotes, setIsRecordingNotes] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const recognitionRef = useRef(null);
@@ -2381,6 +2446,66 @@ function Treinos({ core, updateCore, profile }) {
       </Card>
 
       <Card>
+        <Label>Gravar treino com GPS</Label>
+        <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+          {isNativePlatform
+            ? "Grava sua rota em tempo real, funcionando mesmo com a tela apagada."
+            : "Grava sua rota em tempo real enquanto esta aba estiver aberta e em primeiro plano. Pra gravar com a tela apagada, use o app instalado no celular."}
+        </div>
+        {!gpsTracking ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+            <div style={{ minWidth: 160 }}>
+              <Label>Modalidade</Label>
+              <Select value={gpsType} onChange={(e) => setGpsType(e.target.value)}>
+                <option>Corrida</option>
+                <option>Ciclismo</option>
+                <option>Caminhada</option>
+                <option>Outro</option>
+              </Select>
+            </div>
+            <Btn
+              variant="gold"
+              onClick={startGpsRecording}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <MapPin size={15} />
+              Iniciar gravação
+            </Btn>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 12 }}>
+              <div>
+                <Label>Duração</Label>
+                <div style={{ fontFamily: "Bebas Neue", fontSize: 28, color: T.textPrimary }}>
+                  {String(Math.floor(gpsElapsedSec / 60)).padStart(2, "0")}:
+                  {String(gpsElapsedSec % 60).padStart(2, "0")}
+                </div>
+              </div>
+              <div>
+                <Label>Distância</Label>
+                <div style={{ fontFamily: "Bebas Neue", fontSize: 28, color: T.textPrimary }}>
+                  {gpsDistanceKm.toFixed(2)} <span style={{ fontSize: 14, color: T.textMuted }}>km</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="gold" onClick={() => stopGpsRecording(true)}>
+                Parar e salvar
+              </Btn>
+              <Btn variant="ghost" onClick={() => stopGpsRecording(false)}>
+                Descartar
+              </Btn>
+            </div>
+            <div style={{ fontFamily: "Inter", fontSize: 11.5, color: T.coral, marginTop: 8 }}>
+              ● Gravando — {isNativePlatform ? "pode apagar a tela normalmente." : "mantenha esta aba aberta."}
+            </div>
+          </div>
+        )}
+        {gpsError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{gpsError}</div>}
+      </Card>
+
+      <Card>
         <Label>Registrar treino realizado (manual)</Label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
@@ -2469,8 +2594,24 @@ function Treinos({ core, updateCore, profile }) {
                 <div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13 }}>{t.type}</span>
-                    <Pill color={t.source === "screenshot" ? T.gold : t.source === "descricao" ? T.steel : T.textMuted}>
-                      {t.source === "screenshot" ? "via print" : t.source === "descricao" ? "via descrição" : "manual"}
+                    <Pill
+                      color={
+                        t.source === "screenshot"
+                          ? T.gold
+                          : t.source === "descricao"
+                          ? T.steel
+                          : t.source === "gps"
+                          ? T.coral
+                          : T.textMuted
+                      }
+                    >
+                      {t.source === "screenshot"
+                        ? "via print"
+                        : t.source === "descricao"
+                        ? "via descrição"
+                        : t.source === "gps"
+                        ? "via GPS"
+                        : "manual"}
                     </Pill>
                   </div>
                   <div style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
