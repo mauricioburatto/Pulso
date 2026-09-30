@@ -30,9 +30,11 @@ test('signup e navegação por todas as abas sem erros', async ({ page }) => {
   await page.goto('/');
   await page.getByText('Criar conta', { exact: true }).first().click();
 
-  const email = `smoke_${Date.now()}@test.com`;
+  const stamp = Date.now();
+  const email = `smoke_${stamp}@test.com`;
   await page.getByPlaceholder('Nome completo').fill('Smoke Test');
   await page.getByPlaceholder('Email').fill(email);
+  await page.getByPlaceholder(/Nome de usuário/).fill(`smoke_${stamp}`);
   await page.getByPlaceholder('Criar senha (mín. 8 caracteres)').fill('senha1234');
   await page.getByPlaceholder('Confirmar senha').fill('senha1234');
   await page.getByPlaceholder('Data de nascimento').fill('1995-05-20');
