@@ -62,10 +62,13 @@ function setSessionCookie(res, accountId) {
   res.cookie(SESSION_COOKIE, token, { ...SESSION_COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE_MS });
 }
 
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.]{3,24}$/;
+
 router.post('/signup', authLimiter, async (req, res) => {
   const {
     name,
     email,
+    username,
     password,
     modality,
     level,
@@ -76,11 +79,18 @@ router.post('/signup', authLimiter, async (req, res) => {
     sex,
   } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Nome, email e senha são obrigatórios.' });
+  if (!name || !email || !password || !username) {
+    return res.status(400).json({ error: 'Nome, email, nome de usuário e senha são obrigatórios.' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'A senha deve ter pelo menos 8 caracteres.' });
+  }
+
+  const normalizedUsername = String(username).trim();
+  if (!USERNAME_PATTERN.test(normalizedUsername)) {
+    return res.status(400).json({
+      error: 'Nome de usuário deve ter de 3 a 24 caracteres, usando apenas letras, números, ponto ou underscore.',
+    });
   }
 
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -90,22 +100,40 @@ router.post('/signup', authLimiter, async (req, res) => {
     return res.status(409).json({ error: 'Já existe uma conta com este email.' });
   }
 
+  const usernameTaken = await prisma.account.findFirst({
+    where: { username: { equals: normalizedUsername, mode: 'insensitive' } },
+  });
+  if (usernameTaken) {
+    return res.status(409).json({ error: 'Esse nome de usuário já está em uso — escolha outro.' });
+  }
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-  const account = await prisma.account.create({
-    data: {
-      name,
-      email: normalizedEmail,
-      passwordHash,
-      modality: modality ?? null,
-      level: level ?? null,
-      weight: weight ?? null,
-      height: height ?? null,
-      trainingTime: trainingTime ?? null,
-      birthDate: birthDate ? new Date(birthDate) : null,
-      sex: sex ?? null,
-    },
-  });
+  let account;
+  try {
+    account = await prisma.account.create({
+      data: {
+        name,
+        email: normalizedEmail,
+        username: normalizedUsername,
+        passwordHash,
+        modality: modality ?? null,
+        level: level ?? null,
+        weight: weight ?? null,
+        height: height ?? null,
+        trainingTime: trainingTime ?? null,
+        birthDate: birthDate ? new Date(birthDate) : null,
+        sex: sex ?? null,
+      },
+    });
+  } catch (err) {
+    // Corrida rara: dois cadastros com o mesmo username passaram pela checagem
+    // acima ao mesmo tempo. A constraint unique do banco pega isso.
+    if (err.code === 'P2002' && err.meta && err.meta.target && err.meta.target.includes('username')) {
+      return res.status(409).json({ error: 'Esse nome de usuário já está em uso — escolha outro.' });
+    }
+    throw err;
+  }
 
   await prisma.athleteCore.create({
     data: {
@@ -127,7 +155,7 @@ router.post('/signup', authLimiter, async (req, res) => {
           targetCarb: '',
           targetFat: '',
           meals: [],
-          questionnaire: { rotina: '', alimentacaoAtual: '', gosta: '', naoGosta: '', paladar: '', suplementos: '', observacoes: '' },
+          questionnaire: { rotina: '', alimentacaoAtual: '', gosta: '', naoGosta: '', paladarDoceSalgado: '', paladarTemperatura: '', suplementos: '', observacoes: '' },
         },
       },
     },

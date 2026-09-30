@@ -156,7 +156,7 @@ const emptyCore = () => ({
     targetCarb: "",
     targetFat: "",
     meals: [],
-    questionnaire: { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladar: "", suplementos: "", observacoes: "" },
+    questionnaire: { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladarDoceSalgado: "", paladarTemperatura: "", suplementos: "", observacoes: "" },
   },
 });
 
@@ -647,6 +647,7 @@ function ProfileGate({ onEnter }) {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [level, setLevel] = useState("Amador");
@@ -672,8 +673,12 @@ function ProfileGate({ onEnter }) {
 
   async function handleSignup() {
     setError("");
-    if (!name.trim() || !email.trim() || !password) {
-      setError("Preencha nome, email e senha.");
+    if (!name.trim() || !email.trim() || !username.trim() || !password) {
+      setError("Preencha nome, email, nome de usuário e senha.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.]{3,24}$/.test(username.trim())) {
+      setError("Nome de usuário deve ter de 3 a 24 caracteres, usando apenas letras, números, ponto ou underscore.");
       return;
     }
     if (password.length < 8) {
@@ -710,6 +715,7 @@ function ProfileGate({ onEnter }) {
       const account = await api.signup({
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        username: username.trim(),
         password,
         level,
         weight: Number(weight.replace(",", ".")),
@@ -1112,6 +1118,19 @@ function ProfileGate({ onEnter }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              <div>
+                <Input
+                  type="text"
+                  autoComplete="username"
+                  name="username"
+                  placeholder="Nome de usuário (ex: joao_silva)"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+                <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+                  3 a 24 caracteres — letras, números, ponto ou underscore. Precisa ser único.
+                </div>
+              </div>
               <PasswordInput
                 autoComplete="new-password"
                 name="new-password"
@@ -1320,6 +1339,11 @@ function Sidebar({ profile, active, setActive, onSwitch, isFullscreen, toggleFul
         <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12.5, color: T.textPrimary, marginTop: 8 }}>
           {profile.name}
         </div>
+        {profile.username && (
+          <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted, marginTop: 1 }}>
+            @{profile.username}
+          </div>
+        )}
       </div>
       <div style={{ padding: "0 20px" }}>
         <PulseDivider height={14} />
@@ -1469,8 +1493,11 @@ function MobileDrawer({ open, onClose, profile, active, setActive, onSwitch }) {
             <X size={20} />
           </button>
         </div>
-        <div style={{ padding: "0 18px 10px", fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>
-          {profile.name}
+        <div style={{ padding: "0 18px 10px" }}>
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>{profile.name}</div>
+          {profile.username && (
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted }}>@{profile.username}</div>
+          )}
         </div>
         <div style={{ padding: "0 18px" }}>
           <PulseDivider height={14} />
@@ -4661,7 +4688,7 @@ function QuestionnaireField({ label, placeholder, value, onChange }) {
 
 function Nutricao({ core, updateCore, profile }) {
   const diet = core.diet || { targetKcal: "", targetProtein: "", targetCarb: "", targetFat: "", meals: [] };
-  const emptyQuestionnaire = { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladar: "", suplementos: "", observacoes: "" };
+  const emptyQuestionnaire = { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladarDoceSalgado: "", paladarTemperatura: "", suplementos: "", observacoes: "" };
   const [questionnaire, setQuestionnaire] = useState({ ...emptyQuestionnaire, ...(diet.questionnaire || {}) });
   const [showFoodSearch, setShowFoodSearch] = useState(false);
   const questionnaireFilledCount = Object.values(questionnaire || {}).filter((v) => v && String(v).trim()).length;
@@ -4888,7 +4915,7 @@ function Nutricao({ core, updateCore, profile }) {
             <Label>Questionário para montar a dieta (opcional)</Label>
             <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>
               {questionnaireFilledCount > 0
-                ? `${questionnaireFilledCount} de 7 perguntas respondidas. Quanto mais detalhes, mais personalizada a dieta gerada pela IA — mas dá pra gerar sem preencher nada.`
+                ? `${questionnaireFilledCount} de ${Object.keys(questionnaire).length} perguntas respondidas. Quanto mais detalhes, mais personalizada a dieta gerada pela IA — mas dá pra gerar sem preencher nada.`
                 : "Quanto mais detalhes, mais personalizada a dieta gerada pela IA — mas dá pra gerar sem preencher nada disso."}
             </div>
           </div>
@@ -4920,12 +4947,29 @@ function Nutricao({ core, updateCore, profile }) {
             value={questionnaire.naoGosta}
             onChange={(v) => updateQuestionnaireField("naoGosta", v)}
           />
-          <QuestionnaireField
-            label="Paladar e preferências (doce/salgado, quente/frio)"
-            placeholder="Ex: prefiro comidas mais salgadas, gosto de comida bem quente, não curto muito doce..."
-            value={questionnaire.paladar}
-            onChange={(v) => updateQuestionnaireField("paladar", v)}
-          />
+          <div>
+            <Label>Paladar e preferências</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Select
+                value={questionnaire.paladarDoceSalgado}
+                onChange={(e) => updateQuestionnaireField("paladarDoceSalgado", e.target.value)}
+              >
+                <option value="">Doce ou salgado — sem preferência</option>
+                <option value="Prefere comidas salgadas">Prefiro salgado</option>
+                <option value="Prefere comidas doces">Prefiro doce</option>
+                <option value="Gosta dos dois igualmente">Gosto dos dois</option>
+              </Select>
+              <Select
+                value={questionnaire.paladarTemperatura}
+                onChange={(e) => updateQuestionnaireField("paladarTemperatura", e.target.value)}
+              >
+                <option value="">Quente ou frio — sem preferência</option>
+                <option value="Prefere comida quente">Prefiro quente</option>
+                <option value="Prefere comida fria ou gelada">Prefiro frio</option>
+                <option value="Tanto faz a temperatura">Tanto faz</option>
+              </Select>
+            </div>
+          </div>
           <QuestionnaireField
             label="Suplementação em uso (quais e quantidade)"
             placeholder="Ex: whey protein 30g pela manhã, creatina 5g por dia, multivitamínico 1x ao dia..."

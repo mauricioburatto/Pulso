@@ -300,7 +300,9 @@ Seja extremamente econômico em texto — isso é crítico, a resposta tem limit
       q.alimentacaoAtual && q.alimentacaoAtual.trim() ? `Alimentação atual: ${q.alimentacaoAtual.trim()}` : '',
       q.gosta && q.gosta.trim() ? `Gosta de comer: ${q.gosta.trim()}` : '',
       q.naoGosta && q.naoGosta.trim() ? `Não gosta / não come: ${q.naoGosta.trim()}` : '',
-      q.paladar && q.paladar.trim() ? `Paladar/preferências: ${q.paladar.trim()}` : '',
+      q.paladarDoceSalgado || q.paladarTemperatura
+        ? `Paladar/preferências: ${[q.paladarDoceSalgado, q.paladarTemperatura].filter(Boolean).join('; ')}`
+        : '',
       q.suplementos && q.suplementos.trim() ? `Suplementação em uso: ${q.suplementos.trim()}` : '',
       q.observacoes && q.observacoes.trim() ? `Considerações adicionais do atleta: ${q.observacoes.trim()}` : '',
     ]
