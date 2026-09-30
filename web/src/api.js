@@ -65,6 +65,13 @@ export const api = {
   },
   forgotPassword: (email) => apiFetch('/auth/forgot-password', { method: 'POST', body: { email } }),
   resetPassword: (payload) => apiFetch('/auth/reset-password', { method: 'POST', body: payload }),
+  changePassword: (payload) => apiFetch('/auth/change-password', { method: 'POST', body: payload }),
+
+  async updateProfile(patch) {
+    const data = await apiFetch('/me', { method: 'PATCH', body: patch });
+    return normalizeAccount(data.account);
+  },
+  deleteAccount: () => apiFetch('/me', { method: 'DELETE' }),
 
   async getCore() {
     const data = await apiFetch('/athlete/core');

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users, MapPin } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users, MapPin, Check, Settings } from "lucide-react";
 import { api, resolveMediaUrl, setUnauthorizedHandler } from "./api";
 import { startRouteTracking, routeDistanceKm, isNativePlatform } from "./geo";
+import { TERMOS_DE_USO, POLITICA_PRIVACIDADE } from "./legal";
 
 /* ============================================================
    DESIGN TOKENS
@@ -96,6 +97,11 @@ function ensureGlobalStyles() {
 
     .pulso-scale-in { animation: pulsoScaleIn .22s cubic-bezier(.2,.7,.3,1); }
     @keyframes pulsoScaleIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .pulso-auth-hero { display: none; }
+    @media (min-width: 980px) {
+      .pulso-auth-hero { display: flex; }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -150,7 +156,7 @@ const emptyCore = () => ({
     targetCarb: "",
     targetFat: "",
     meals: [],
-    questionnaire: { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladar: "", suplementos: "", observacoes: "" },
+    questionnaire: { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladarDoceSalgado: "", paladarTemperatura: "", suplementos: "", observacoes: "" },
   },
 });
 
@@ -444,19 +450,204 @@ function EmptyState({ title, hint }) {
   );
 }
 
+function Modal({ title, onClose, children, maxWidth = 640 }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth,
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          borderRadius: 10,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 15, color: T.textPrimary }}>{title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", padding: 4 }}>
+            <X size={20} />
+          </button>
+        </div>
+        <div style={{ padding: 18, overflowY: "auto" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Renderizador bem simples pro markdown dos documentos legais — só o
+// suficiente pra ler títulos, listas, citação e negrito com folga, sem
+// precisar de uma lib de markdown completa pra dois documentos estáticos.
+function LiteMarkdown({ text }) {
+  const lines = text.split("\n");
+  const blocks = [];
+  let currentList = null;
+  let currentQuote = null;
+  let currentPara = null;
+
+  function flushList() {
+    if (currentList) {
+      blocks.push(<ul key={`ul_${blocks.length}`} style={{ margin: "6px 0 12px", paddingLeft: 20 }}>{currentList}</ul>);
+      currentList = null;
+    }
+  }
+  function flushQuote() {
+    if (currentQuote) {
+      blocks.push(
+        <div
+          key={`q_${blocks.length}`}
+          style={{
+            fontFamily: "Inter",
+            fontSize: 12.5,
+            color: T.gold,
+            background: `${T.gold}14`,
+            border: `1px solid ${T.gold}33`,
+            borderRadius: 7,
+            padding: "8px 12px",
+            marginBottom: 10,
+            lineHeight: 1.6,
+          }}
+        >
+          {inline(currentQuote.join(" "))}
+        </div>
+      );
+      currentQuote = null;
+    }
+  }
+  function flushPara() {
+    if (currentPara) {
+      blocks.push(
+        <div key={`p_${blocks.length}`} style={{ fontFamily: "Inter", fontSize: 13, color: T.textPrimary, lineHeight: 1.6, marginBottom: 8 }}>
+          {inline(currentPara.join(" "))}
+        </div>
+      );
+      currentPara = null;
+    }
+  }
+  function flushAll() {
+    flushList();
+    flushQuote();
+    flushPara();
+  }
+  function inline(str) {
+    const parts = str.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((p, i) =>
+      p.startsWith("**") && p.endsWith("**") ? <strong key={i}>{p.slice(2, -2)}</strong> : <React.Fragment key={i}>{p}</React.Fragment>
+    );
+  }
+  lines.forEach((line, i) => {
+    if (line.startsWith("# ")) {
+      flushAll();
+      blocks.push(
+        <div key={i} style={{ fontFamily: "Bebas Neue", fontSize: 26, color: T.textPrimary, marginBottom: 10 }}>
+          {line.slice(2)}
+        </div>
+      );
+    } else if (line.startsWith("## ")) {
+      flushAll();
+      blocks.push(
+        <div key={i} style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 15, color: T.textPrimary, marginTop: 18, marginBottom: 6 }}>
+          {inline(line.slice(3))}
+        </div>
+      );
+    } else if (line.startsWith("### ")) {
+      flushAll();
+      blocks.push(
+        <div key={i} style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13.5, color: T.textPrimary, marginTop: 12, marginBottom: 4 }}>
+          {inline(line.slice(4))}
+        </div>
+      );
+    } else if (line.startsWith("> ")) {
+      flushList();
+      flushPara();
+      if (!currentQuote) currentQuote = [];
+      currentQuote.push(line.slice(2));
+    } else if (line.startsWith("- ")) {
+      flushQuote();
+      flushPara();
+      if (!currentList) currentList = [];
+      currentList.push(
+        <li key={i} style={{ fontFamily: "Inter", fontSize: 13, color: T.textPrimary, lineHeight: 1.6 }}>
+          {inline(line.slice(2))}
+        </li>
+      );
+    } else if (line.trim() === "") {
+      flushAll();
+    } else {
+      flushList();
+      flushQuote();
+      if (!currentPara) currentPara = [];
+      currentPara.push(line);
+    }
+  });
+  flushAll();
+  return <div>{blocks}</div>;
+}
+
+function LegalModal({ doc, onClose }) {
+  if (!doc) return null;
+  return (
+    <Modal title={doc === "termos" ? "Termos de Uso" : "Política de Privacidade"} onClose={onClose} maxWidth={720}>
+      <LiteMarkdown text={doc === "termos" ? TERMOS_DE_USO : POLITICA_PRIVACIDADE} />
+    </Modal>
+  );
+}
+
+function SegmentedTabs({ options, value, onChange, maxWidth }) {
+  return (
+    <div style={{ display: "flex", gap: 4, background: T.bgElevated, borderRadius: 8, padding: 3, maxWidth }}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          style={{
+            flex: 1,
+            padding: "9px 0",
+            borderRadius: 6,
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "Inter",
+            fontWeight: 600,
+            fontSize: 13,
+            background: value === opt.value ? T.surface : "transparent",
+            color: value === opt.value ? T.textPrimary : T.textMuted,
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LegalLinks({ onOpen, style }) {
+  return (
+    <div style={{ display: "flex", gap: 10, fontFamily: "Inter", fontSize: 11.5, color: T.textMuted, ...style }}>
+      <button onClick={() => onOpen("termos")} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+        Termos de uso
+      </button>
+      <span>·</span>
+      <button onClick={() => onOpen("privacidade")} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+        Política de privacidade
+      </button>
+    </div>
+  );
+}
+
 /* ============================================================
    PROFILE GATE — criar / selecionar atleta
 ============================================================= */
-// ATENÇÃO: isso não é um hash criptográfico seguro — é só uma ofuscação simples
-// para não guardar a senha em texto puro no armazenamento local. Como este app
-// não tem backend, qualquer "login" aqui é um gate local, não autenticação real.
-// Um produto de verdade precisa de um servidor fazendo isso com bcrypt/argon2.
 function ProfileGate({ onEnter }) {
   const [mode, setMode] = useState("login"); // "signup" | "login" | "reset"
   const [submitting, setSubmitting] = useState(false);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [level, setLevel] = useState("Amador");
@@ -465,6 +656,8 @@ function ProfileGate({ onEnter }) {
   const [trainingTime, setTrainingTime] = useState("1 ano ou menos");
   const [birthDate, setBirthDate] = useState("");
   const [sex, setSex] = useState("Feminino");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [legalDoc, setLegalDoc] = useState(null);
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -480,8 +673,12 @@ function ProfileGate({ onEnter }) {
 
   async function handleSignup() {
     setError("");
-    if (!name.trim() || !email.trim() || !password) {
-      setError("Preencha nome, email e senha.");
+    if (!name.trim() || !email.trim() || !username.trim() || !password) {
+      setError("Preencha nome, email, nome de usuário e senha.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.]{3,24}$/.test(username.trim())) {
+      setError("Nome de usuário deve ter de 3 a 24 caracteres, usando apenas letras, números, ponto ou underscore.");
       return;
     }
     if (password.length < 8) {
@@ -509,11 +706,16 @@ function ProfileGate({ onEnter }) {
       setError("Confira a data de nascimento informada.");
       return;
     }
+    if (!acceptedTerms) {
+      setError("Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar sua conta.");
+      return;
+    }
     setSubmitting(true);
     try {
       const account = await api.signup({
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        username: username.trim(),
         password,
         level,
         weight: Number(weight.replace(",", ".")),
@@ -610,15 +812,62 @@ function ProfileGate({ onEnter }) {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-      }}
-    >
+    <div className="pulso-app-bg" style={{ minHeight: "100%", display: "flex" }}>
+      <div
+        className="pulso-auth-hero"
+        style={{
+          flex: 1,
+          maxWidth: 560,
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: "60px 56px",
+          borderRight: `1px solid ${T.border}`,
+        }}
+      >
+        <div style={{ fontFamily: "Bebas Neue", fontSize: 56, letterSpacing: "0.04em", color: T.textPrimary, lineHeight: 1 }}>
+          PULSO
+        </div>
+        <div style={{ fontFamily: "Inter", fontSize: 15, color: T.textMuted, marginTop: 8, maxWidth: 380 }}>
+          Tudo que um atleta precisa acompanhar num só lugar — com IA fazendo o trabalho pesado.
+        </div>
+        <PulseDivider height={26} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 10 }}>
+          {[
+            { icon: Dumbbell, color: T.coral, text: "Planilha de treino gerada por IA a partir do seu nível real" },
+            { icon: HeartPulse, color: T.gold, text: "Avaliação de composição corporal a partir de fotos" },
+            { icon: Apple, color: T.steel, text: "Dieta personalizada com base na tabela TACO" },
+            { icon: Users, color: T.good, text: "Acompanhe o treino dos seus amigos na Comunidade" },
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 9,
+                  background: `${item.color}18`,
+                  border: `1px solid ${item.color}40`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <item.icon size={17} color={item.color} />
+              </div>
+              <div style={{ fontFamily: "Inter", fontSize: 13.5, color: T.textPrimary }}>{item.text}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+        }}
+      >
       <div style={{ width: "100%", maxWidth: 440 }}>
         <div
           style={{
@@ -869,6 +1118,19 @@ function ProfileGate({ onEnter }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              <div>
+                <Input
+                  type="text"
+                  autoComplete="username"
+                  name="username"
+                  placeholder="Nome de usuário (ex: joao_silva)"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+                <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+                  3 a 24 caracteres — letras, números, ponto ou underscore. Precisa ser único.
+                </div>
+              </div>
               <PasswordInput
                 autoComplete="new-password"
                 name="new-password"
@@ -928,16 +1190,46 @@ function ProfileGate({ onEnter }) {
                 </Select>
               </div>
 
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  style={{ marginTop: 3 }}
+                />
+                <span style={{ fontFamily: "Inter", fontSize: 12, color: T.textMuted, lineHeight: 1.5 }}>
+                  Li e concordo com os{" "}
+                  <button
+                    type="button"
+                    onClick={() => setLegalDoc("termos")}
+                    style={{ background: "none", border: "none", color: T.steel, cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}
+                  >
+                    Termos de Uso
+                  </button>{" "}
+                  e a{" "}
+                  <button
+                    type="button"
+                    onClick={() => setLegalDoc("privacidade")}
+                    style={{ background: "none", border: "none", color: T.steel, cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}
+                  >
+                    Política de Privacidade
+                  </button>
+                  , incluindo o tratamento dos meus dados de saúde conforme descrito nela.
+                </span>
+              </label>
+
               {error && (
                 <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5 }}>{error}</div>
               )}
-              <Btn variant="primary" onClick={handleSignup} disabled={submitting}>
+              <Btn variant="primary" onClick={handleSignup} disabled={submitting || !acceptedTerms}>
                 {submitting ? "Criando conta..." : "Criar conta e entrar"}
               </Btn>
             </div>
           </Card>
         )}
       </div>
+      </div>
+      <LegalModal doc={legalDoc} onClose={() => setLegalDoc(null)} />
     </div>
   );
 }
@@ -956,6 +1248,7 @@ const TABS = [
   { id: "analise", label: "Análise IA" },
   { id: "relatorios", label: "Relatórios" },
   { id: "comunidade", label: "Comunidade" },
+  { id: "ajustes", label: "Ajustes" },
 ];
 
 const TAB_ICONS = {
@@ -969,6 +1262,7 @@ const TAB_ICONS = {
   analise: Sparkles,
   relatorios: FileText,
   comunidade: Users,
+  ajustes: Settings,
 };
 
 function useIsMobile(breakpoint = 900) {
@@ -1024,6 +1318,7 @@ function NavList({ active, setActive, onNavigate }) {
 }
 
 function Sidebar({ profile, active, setActive, onSwitch, isFullscreen, toggleFullscreen, fullscreenSupported }) {
+  const [legalDoc, setLegalDoc] = useState(null);
   return (
     <div
       style={{
@@ -1046,6 +1341,11 @@ function Sidebar({ profile, active, setActive, onSwitch, isFullscreen, toggleFul
         <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12.5, color: T.textPrimary, marginTop: 8 }}>
           {profile.name}
         </div>
+        {profile.username && (
+          <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted, marginTop: 1 }}>
+            @{profile.username}
+          </div>
+        )}
       </div>
       <div style={{ padding: "0 20px" }}>
         <PulseDivider height={14} />
@@ -1094,6 +1394,10 @@ function Sidebar({ profile, active, setActive, onSwitch, isFullscreen, toggleFul
           sair
         </button>
       </div>
+      <div style={{ padding: "0 14px 14px" }}>
+        <LegalLinks onOpen={setLegalDoc} style={{ justifyContent: "center" }} />
+      </div>
+      <LegalModal doc={legalDoc} onClose={() => setLegalDoc(null)} />
     </div>
   );
 }
@@ -1162,6 +1466,7 @@ function MobileTopBar({ profile, onOpenMenu, isFullscreen, toggleFullscreen, ful
 }
 
 function MobileDrawer({ open, onClose, profile, active, setActive, onSwitch }) {
+  const [legalDoc, setLegalDoc] = useState(null);
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex" }}>
@@ -1190,8 +1495,11 @@ function MobileDrawer({ open, onClose, profile, active, setActive, onSwitch }) {
             <X size={20} />
           </button>
         </div>
-        <div style={{ padding: "0 18px 10px", fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>
-          {profile.name}
+        <div style={{ padding: "0 18px 10px" }}>
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>{profile.name}</div>
+          {profile.username && (
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.textMuted }}>@{profile.username}</div>
+          )}
         </div>
         <div style={{ padding: "0 18px" }}>
           <PulseDivider height={14} />
@@ -1218,7 +1526,11 @@ function MobileDrawer({ open, onClose, profile, active, setActive, onSwitch }) {
             sair
           </button>
         </div>
+        <div style={{ padding: "0 18px 14px" }}>
+          <LegalLinks onOpen={setLegalDoc} style={{ justifyContent: "center" }} />
+        </div>
       </div>
+      <LegalModal doc={legalDoc} onClose={() => setLegalDoc(null)} />
     </div>
   );
 }
@@ -1326,6 +1638,150 @@ function TrendTag({ delta, neutral }) {
   );
 }
 
+const QUICK_ACTIONS = [
+  { tab: "treinos", label: "Registrar treino", color: T.coral },
+  { tab: "sincronia", label: "Sincronizar treino", color: T.steel },
+  { tab: "nutricao", label: "Ver dieta", color: T.good },
+  { tab: "suplementos", label: "Suplementos", color: T.gold },
+  { tab: "comunidade", label: "Comunidade", color: T.steel },
+];
+
+function QuickActions({ onNavigate }) {
+  if (!onNavigate) return null;
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {QUICK_ACTIONS.map((a) => {
+        const Icon = TAB_ICONS[a.tab];
+        return (
+          <Card
+            key={a.tab}
+            className="pulso-card--interactive"
+            onClick={() => onNavigate(a.tab)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              cursor: "pointer",
+              flex: "1 1 170px",
+            }}
+          >
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 9,
+                background: `${a.color}18`,
+                border: `1px solid ${a.color}40`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Icon size={16} color={a.color} />
+            </div>
+            <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13, color: T.textPrimary }}>
+              {a.label}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function OnboardingChecklist({ core, onNavigate }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("pulso_onboarding_dismissed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const steps = [
+    { done: (core.modalities || []).length > 0, label: "Cadastre uma modalidade praticada", tab: "treinos" },
+    { done: (core.trainings || []).length > 0, label: "Registre seu primeiro treino", tab: "treinos" },
+    { done: (core.goals || []).length > 0, label: "Cadastre uma meta ou prova", tab: "metas" },
+  ];
+  const allDone = steps.every((s) => s.done);
+
+  if (allDone || dismissed) return null;
+
+  function dismiss() {
+    setDismissed(true);
+    try {
+      localStorage.setItem("pulso_onboarding_dismissed", "1");
+    } catch {}
+  }
+
+  return (
+    <Card style={{ borderColor: T.gold + "40" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div>
+          <Label>Comece por aqui</Label>
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginTop: 2 }}>
+            Três passos pra deixar o Pulso funcionando pra você.
+          </div>
+        </div>
+        <button onClick={dismiss} title="Dispensar" style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", padding: 4 }}>
+          <X size={16} />
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+        {steps.map((s, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "9px 12px",
+              background: T.bgElevated,
+              borderRadius: 7,
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  border: `1.5px solid ${s.done ? T.good : T.border}`,
+                  background: s.done ? T.good : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {s.done && <Check size={12} color="#0A160E" />}
+              </div>
+              <div
+                style={{
+                  fontFamily: "Inter",
+                  fontSize: 13,
+                  color: s.done ? T.textMuted : T.textPrimary,
+                  textDecoration: s.done ? "line-through" : "none",
+                }}
+              >
+                {s.label}
+              </div>
+            </div>
+            {!s.done && onNavigate && (
+              <Btn variant="ghost" onClick={() => onNavigate(s.tab)} style={{ height: 30, padding: "0 12px", fontSize: 12, flexShrink: 0 }}>
+                Ir
+              </Btn>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function Dashboard({ core, profile, onNavigate }) {
   const nextGoal = [...core.goals]
     .filter((g) => daysUntil(g.targetDate) >= 0)
@@ -1369,6 +1825,8 @@ function Dashboard({ core, profile, onNavigate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <QuickActions onNavigate={onNavigate} />
+      <OnboardingChecklist core={core} onNavigate={onNavigate} />
       <Card
         style={{
           background: `linear-gradient(135deg, ${T.surfaceAlt}, ${T.surface})`,
@@ -1432,24 +1890,49 @@ function Dashboard({ core, profile, onNavigate }) {
             value: last7.length,
             unit: "sessões",
             trend: hasPrevData ? last7.length - prev7.length : null,
+            icon: Dumbbell,
+            color: T.coral,
           },
           {
             label: "Duração total",
             value: totalDuration,
             unit: "min",
             trend: hasPrevData ? totalDuration - prevDuration : null,
+            icon: Clock,
+            color: T.steel,
           },
-          ...(showDistance ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km", trend: null }] : []),
+          ...(showDistance
+            ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km", trend: null, icon: MapPin, color: T.good }]
+            : []),
           {
             label: "PSE médio",
             value: avgEffort !== null ? avgEffort.toFixed(1) : "—",
             unit: "/10",
             trend: avgEffort !== null && prevAvgEffort !== null ? avgEffort - prevAvgEffort : null,
             neutral: true,
+            icon: Gauge,
+            color: T.gold,
           },
         ].map((s) => (
           <Card key={s.label} style={{ padding: 14 }}>
-            <Label>{s.label}</Label>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 7,
+                  background: `${s.color}18`,
+                  border: `1px solid ${s.color}40`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <s.icon size={13} color={s.color} />
+              </div>
+              <Label>{s.label}</Label>
+            </div>
             <div style={{ fontFamily: "Bebas Neue", fontSize: 32, color: T.textPrimary }}>
               {s.value}
               <span style={{ fontFamily: "Inter", fontSize: 13, color: T.textMuted, marginLeft: 5 }}>
@@ -1980,12 +2463,18 @@ function TreinoAtualImport({ core, updateCore, profile }) {
           type="file"
           accept="image/*,application/pdf"
           onChange={(e) => handleFile(e.target.files[0])}
-          style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}
+          style={{ display: "none" }}
         />
+        <Btn variant="ghost" onClick={() => fileRef.current && fileRef.current.click()}>
+          Escolher arquivo
+        </Btn>
         {file && (
-          <button onClick={clearFile} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}>
-            remover anexo
-          </button>
+          <>
+            <span style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>{file.name}</span>
+            <button onClick={clearFile} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}>
+              remover anexo
+            </button>
+          </>
         )}
       </div>
       {fileKind === "image" && filePreview && (
@@ -2044,6 +2533,7 @@ function TreinoAtualImport({ core, updateCore, profile }) {
 }
 
 function Treinos({ core, updateCore, profile }) {
+  const [subTab, setSubTab] = useState("planejar"); // "planejar" | "registrar" | "historico"
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     type: "Corrida",
@@ -2296,6 +2786,19 @@ function Treinos({ core, updateCore, profile }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <SegmentedTabs
+        maxWidth={480}
+        value={subTab}
+        onChange={setSubTab}
+        options={[
+          { value: "planejar", label: "Planejar" },
+          { value: "registrar", label: "Registrar" },
+          { value: "historico", label: `Histórico${history.length > 0 ? ` (${history.length})` : ""}` },
+        ]}
+      />
+
+      {subTab === "planejar" && (
+      <>
       <ModalidadesManager core={core} updateCore={updateCore} profile={profile} />
 
       <TreinoAtualImport core={core} updateCore={updateCore} profile={profile} />
@@ -2444,7 +2947,11 @@ function Treinos({ core, updateCore, profile }) {
           </table>
         )}
       </Card>
+      </>
+      )}
 
+      {subTab === "registrar" && (
+      <>
       <Card>
         <Label>Gravar treino com GPS</Label>
         <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
@@ -2573,7 +3080,10 @@ function Treinos({ core, updateCore, profile }) {
           </Btn>
         </div>
       </Card>
+      </>
+      )}
 
+      {subTab === "historico" && (
       <Card>
         <Label>Histórico de treinos</Label>
         {history.length === 0 ? (
@@ -2630,6 +3140,7 @@ function Treinos({ core, updateCore, profile }) {
           </div>
         )}
       </Card>
+      )}
     </div>
   );
 }
@@ -4258,9 +4769,11 @@ function QuestionnaireField({ label, placeholder, value, onChange }) {
 
 function Nutricao({ core, updateCore, profile }) {
   const diet = core.diet || { targetKcal: "", targetProtein: "", targetCarb: "", targetFat: "", meals: [] };
-  const emptyQuestionnaire = { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladar: "", suplementos: "", observacoes: "" };
+  const emptyQuestionnaire = { rotina: "", alimentacaoAtual: "", gosta: "", naoGosta: "", paladarDoceSalgado: "", paladarTemperatura: "", suplementos: "", observacoes: "" };
   const [questionnaire, setQuestionnaire] = useState({ ...emptyQuestionnaire, ...(diet.questionnaire || {}) });
   const [showFoodSearch, setShowFoodSearch] = useState(false);
+  const questionnaireFilledCount = Object.values(questionnaire || {}).filter((v) => v && String(v).trim()).length;
+  const [showQuestionnaire, setShowQuestionnaire] = useState(questionnaireFilledCount > 0);
   const [newMealName, setNewMealName] = useState("");
   const [newMealTime, setNewMealTime] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -4475,11 +4988,22 @@ function Nutricao({ core, updateCore, profile }) {
       </Card>
 
       <Card>
-        <Label>Questionário para montar a dieta</Label>
-        <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
-          Para que seu plano alimentar seja personalizado, individual, preencha as perguntas abaixo.
+        <div
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          onClick={() => setShowQuestionnaire((v) => !v)}
+        >
+          <div>
+            <Label>Questionário para montar a dieta (opcional)</Label>
+            <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }}>
+              {questionnaireFilledCount > 0
+                ? `${questionnaireFilledCount} de ${Object.keys(questionnaire).length} perguntas respondidas. Quanto mais detalhes, mais personalizada a dieta gerada pela IA — mas dá pra gerar sem preencher nada.`
+                : "Quanto mais detalhes, mais personalizada a dieta gerada pela IA — mas dá pra gerar sem preencher nada disso."}
+            </div>
+          </div>
+          {showQuestionnaire ? <ChevronDown size={18} color={T.textMuted} /> : <ChevronRight size={18} color={T.textMuted} />}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {showQuestionnaire && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
           <QuestionnaireField
             label="Rotina diária"
             placeholder="Ex: acordo às 6h, treino às 7h, trabalho das 9h às 18h, durmo por volta das 23h..."
@@ -4504,12 +5028,29 @@ function Nutricao({ core, updateCore, profile }) {
             value={questionnaire.naoGosta}
             onChange={(v) => updateQuestionnaireField("naoGosta", v)}
           />
-          <QuestionnaireField
-            label="Paladar e preferências (doce/salgado, quente/frio)"
-            placeholder="Ex: prefiro comidas mais salgadas, gosto de comida bem quente, não curto muito doce..."
-            value={questionnaire.paladar}
-            onChange={(v) => updateQuestionnaireField("paladar", v)}
-          />
+          <div>
+            <Label>Paladar e preferências</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Select
+                value={questionnaire.paladarDoceSalgado}
+                onChange={(e) => updateQuestionnaireField("paladarDoceSalgado", e.target.value)}
+              >
+                <option value="">Doce ou salgado — sem preferência</option>
+                <option value="Prefere comidas salgadas">Prefiro salgado</option>
+                <option value="Prefere comidas doces">Prefiro doce</option>
+                <option value="Gosta dos dois igualmente">Gosto dos dois</option>
+              </Select>
+              <Select
+                value={questionnaire.paladarTemperatura}
+                onChange={(e) => updateQuestionnaireField("paladarTemperatura", e.target.value)}
+              >
+                <option value="">Quente ou frio — sem preferência</option>
+                <option value="Prefere comida quente">Prefiro quente</option>
+                <option value="Prefere comida fria ou gelada">Prefiro frio</option>
+                <option value="Tanto faz a temperatura">Tanto faz</option>
+              </Select>
+            </div>
+          </div>
           <QuestionnaireField
             label="Suplementação em uso (quais e quantidade)"
             placeholder="Ex: whey protein 30g pela manhã, creatina 5g por dia, multivitamínico 1x ao dia..."
@@ -4523,11 +5064,14 @@ function Nutricao({ core, updateCore, profile }) {
             onChange={(v) => updateQuestionnaireField("observacoes", v)}
           />
         </div>
+        )}
+        {showQuestionnaire && (
         <div style={{ marginTop: 12 }}>
           <Btn variant="primary" onClick={saveQuestionnaire}>
             Salvar respostas
           </Btn>
         </div>
+        )}
       </Card>
 
       <Card>
@@ -5042,6 +5586,7 @@ function Comunidade({ profile, setProfile }) {
   const [sendMessage, setSendMessage] = useState("");
 
   const [sharing, setSharing] = useState(false);
+  const [copyMsg, setCopyMsg] = useState("");
 
   async function loadAll() {
     setLoading(true);
@@ -5115,6 +5660,41 @@ function Comunidade({ profile, setProfile }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Card>
+        <Label>Seu email</Label>
+        <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
+          Compartilhe com quem você quer adicionar — é assim que eles vão te encontrar no Pulso.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div
+            style={{
+              fontFamily: "JetBrains Mono",
+              fontSize: 13.5,
+              color: T.textPrimary,
+              background: T.bgElevated,
+              border: `1px solid ${T.border}`,
+              borderRadius: 7,
+              padding: "9px 12px",
+              flex: 1,
+              minWidth: 200,
+            }}
+          >
+            {profile.email}
+          </div>
+          <Btn
+            variant="ghost"
+            onClick={() => {
+              navigator.clipboard.writeText(profile.email).then(() => {
+                setCopyMsg("Copiado!");
+                setTimeout(() => setCopyMsg(""), 2000);
+              });
+            }}
+          >
+            {copyMsg || "Copiar"}
+          </Btn>
+        </div>
+      </Card>
+
       <Card>
         <Label>Adicionar amigo</Label>
         <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
@@ -5297,6 +5877,257 @@ function Comunidade({ profile, setProfile }) {
 }
 
 /* ============================================================
+   AJUSTES — editar perfil, senha, privacidade e conta
+============================================================= */
+function Ajustes({ profile, setProfile, onNavigate, onAccountDeleted }) {
+  const [name, setName] = useState(profile.name || "");
+  const [username, setUsername] = useState(profile.username || "");
+  const [birthDate, setBirthDate] = useState(profile.birthDate || "");
+  const [sex, setSex] = useState(profile.sex || "Feminino");
+  const [weight, setWeight] = useState(profile.weight || "");
+  const [height, setHeight] = useState(profile.height || "");
+  const [level, setLevel] = useState(profile.level || "Amador");
+  const [trainingTime, setTrainingTime] = useState(profile.trainingTime || "1 ano ou menos");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+  const [profileError, setProfileError] = useState("");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  async function saveProfile() {
+    setProfileError("");
+    setProfileMsg("");
+    if (!name.trim() || !username.trim()) {
+      setProfileError("Nome e nome de usuário não podem ficar em branco.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.]{3,24}$/.test(username.trim())) {
+      setProfileError("Nome de usuário deve ter de 3 a 24 caracteres, usando apenas letras, números, ponto ou underscore.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const updated = await api.updateProfile({
+        name: name.trim(),
+        username: username.trim(),
+        birthDate: birthDate || null,
+        sex,
+        weight: weight ? Number(String(weight).replace(",", ".")) : null,
+        height: height ? Number(String(height).replace(",", ".")) : null,
+        level,
+        trainingTime,
+      });
+      setProfile(updated);
+      setProfileMsg("Perfil atualizado!");
+    } catch (e) {
+      setProfileError(e && e.message ? e.message : "Não consegui salvar agora.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function changePassword() {
+    setPasswordError("");
+    setPasswordMsg("");
+    if (!currentPassword || !newPassword) {
+      setPasswordError("Preencha a senha atual e a nova senha.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("A nova senha precisa ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("A confirmação não bate com a nova senha.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.changePassword({ currentPassword, newPassword });
+      setPasswordMsg("Senha alterada com sucesso!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (e) {
+      setPasswordError(e && e.message ? e.message : "Não consegui alterar a senha agora.");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function deleteAccount() {
+    setDeleteError("");
+    if (deleteConfirmText.trim().toLowerCase() !== (profile.username || profile.email).toLowerCase()) {
+      setDeleteError("Digite exatamente como pedido acima pra confirmar.");
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      onAccountDeleted();
+    } catch (e) {
+      setDeleteError(e && e.message ? e.message : "Não consegui excluir a conta agora.");
+      setDeleting(false);
+    }
+  }
+
+  const deleteConfirmTarget = profile.username || profile.email;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Card>
+        <Label>Editar perfil</Label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Input placeholder="Nome completo" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input placeholder="Nome de usuário" value={username} onChange={(e) => setUsername(e.target.value)} />
+          </div>
+          <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted }}>Email: {profile.email} (não editável)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+            <Select value={sex} onChange={(e) => setSex(e.target.value)}>
+              <option>Feminino</option>
+              <option>Masculino</option>
+            </Select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="Peso (kg)"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="Altura (m)"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Select value={level} onChange={(e) => setLevel(e.target.value)}>
+              <option>Amador</option>
+              <option>Semi-amador</option>
+              <option>Semi-profissional</option>
+            </Select>
+            <Select value={trainingTime} onChange={(e) => setTrainingTime(e.target.value)}>
+              <option>1 ano ou menos</option>
+              <option>1 a 2 anos</option>
+              <option>2 anos ou mais</option>
+            </Select>
+          </div>
+          <div>
+            <Btn variant="primary" onClick={saveProfile} disabled={savingProfile}>
+              {savingProfile ? "Salvando..." : "Salvar alterações"}
+            </Btn>
+          </div>
+          {profileMsg && <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.good }}>{profileMsg}</div>}
+          {profileError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5 }}>{profileError}</div>}
+        </div>
+      </Card>
+
+      <Card>
+        <Label>Alterar senha</Label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, maxWidth: 380 }}>
+          <PasswordInput
+            placeholder="Senha atual"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+          <PasswordInput
+            placeholder="Nova senha (mín. 8 caracteres)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <PasswordInput
+            placeholder="Confirmar nova senha"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+          />
+          <div>
+            <Btn variant="primary" onClick={changePassword} disabled={changingPassword}>
+              {changingPassword ? "Alterando..." : "Alterar senha"}
+            </Btn>
+          </div>
+          {passwordMsg && <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.good }}>{passwordMsg}</div>}
+          {passwordError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5 }}>{passwordError}</div>}
+        </div>
+      </Card>
+
+      <Card>
+        <Label>Privacidade</Label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, maxWidth: 460 }}>
+            O controle de quais dados seus amigos podem ver (treinos, evolução física) fica na aba Comunidade.
+          </div>
+          {onNavigate && (
+            <Btn variant="ghost" onClick={() => onNavigate("comunidade")}>
+              Ir para Comunidade
+            </Btn>
+          )}
+        </div>
+      </Card>
+
+      <Card style={{ borderColor: T.danger + "40" }}>
+        <Label>Zona de risco</Label>
+        {!showDeleteConfirm ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+            <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, maxWidth: 460 }}>
+              Excluir sua conta apaga permanentemente todos os seus dados — treinos, fotos, avaliações, dieta,
+              amizades. Não tem como desfazer.
+            </div>
+            <Btn variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+              Excluir minha conta
+            </Btn>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
+              Pra confirmar, digite <strong style={{ color: T.textPrimary }}>{deleteConfirmTarget}</strong> abaixo.
+              Essa ação é permanente.
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Input
+                placeholder={deleteConfirmTarget}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                style={{ flex: 1, minWidth: 200 }}
+              />
+              <Btn variant="danger" onClick={deleteAccount} disabled={deleting}>
+                {deleting ? "Excluindo..." : "Confirmar exclusão"}
+              </Btn>
+              <Btn
+                variant="ghost"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText("");
+                  setDeleteError("");
+                }}
+              >
+                Cancelar
+              </Btn>
+            </div>
+            {deleteError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{deleteError}</div>}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================
    APP ROOT
 ============================================================= */
 export default function App() {
@@ -5334,6 +6165,11 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     api.logout().catch(() => {});
+    setProfile(null);
+    setCore(null);
+  }, []);
+
+  const handleAccountDeleted = useCallback(() => {
     setProfile(null);
     setCore(null);
   }, []);
@@ -5412,6 +6248,9 @@ export default function App() {
       {active === "analise" && <AnaliseIA core={core} updateCore={updateCore} profile={profile} />}
       {active === "relatorios" && <Relatorios core={core} updateCore={updateCore} profile={profile} />}
       {active === "comunidade" && <Comunidade profile={profile} setProfile={setProfile} />}
+      {active === "ajustes" && (
+        <Ajustes profile={profile} setProfile={setProfile} onNavigate={setActive} onAccountDeleted={handleAccountDeleted} />
+      )}
     </>
   );
 
@@ -5450,7 +6289,7 @@ export default function App() {
         fullscreenSupported={fullscreenSupported}
       />
       <div style={{ flex: 1, display: "flex", minWidth: 0 }}>
-        <main style={{ flex: 1, minWidth: 0, padding: "28px 32px 60px", maxWidth: 900 }}>{content}</main>
+        <main style={{ flex: 1, minWidth: 0, padding: "28px 32px 60px", maxWidth: 1100 }}>{content}</main>
         <RightRail core={core} profile={profile} />
       </div>
     </div>

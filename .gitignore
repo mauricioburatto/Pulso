@@ -5,3 +5,6 @@ node_modules/
 server/uploads/
 server/dev-emails/
 web/dist/
+web/test-results/
+web/playwright-report/
+web/blob-report/

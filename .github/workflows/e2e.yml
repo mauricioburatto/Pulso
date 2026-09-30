@@ -1,0 +1,64 @@
+name: E2E smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pulso_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pulso_ci
+      JWT_SECRET: ci-only-secret-not-for-production
+      NODE_ENV: development
+      CLIENT_ORIGIN: http://localhost:5173
+      VITE_API_BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependências do servidor
+        working-directory: server
+        run: npm install
+
+      - name: Rodar migrations
+        working-directory: server
+        run: npx prisma migrate deploy
+
+      - name: Instalar dependências do front
+        working-directory: web
+        run: npm install
+
+      - name: Instalar navegadores do Playwright
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Rodar teste de fumaça
+        working-directory: web
+        run: npm run test:e2e
+
+      - name: Publicar relatório em caso de falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
