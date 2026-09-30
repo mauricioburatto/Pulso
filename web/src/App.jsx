@@ -1638,6 +1638,59 @@ function TrendTag({ delta, neutral }) {
   );
 }
 
+const QUICK_ACTIONS = [
+  { tab: "treinos", label: "Registrar treino", color: T.coral },
+  { tab: "sincronia", label: "Sincronizar treino", color: T.steel },
+  { tab: "nutricao", label: "Ver dieta", color: T.good },
+  { tab: "suplementos", label: "Suplementos", color: T.gold },
+  { tab: "comunidade", label: "Comunidade", color: T.steel },
+];
+
+function QuickActions({ onNavigate }) {
+  if (!onNavigate) return null;
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {QUICK_ACTIONS.map((a) => {
+        const Icon = TAB_ICONS[a.tab];
+        return (
+          <Card
+            key={a.tab}
+            className="pulso-card--interactive"
+            onClick={() => onNavigate(a.tab)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              cursor: "pointer",
+              flex: "1 1 170px",
+            }}
+          >
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 9,
+                background: `${a.color}18`,
+                border: `1px solid ${a.color}40`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Icon size={16} color={a.color} />
+            </div>
+            <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13, color: T.textPrimary }}>
+              {a.label}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function OnboardingChecklist({ core, onNavigate }) {
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -1772,6 +1825,7 @@ function Dashboard({ core, profile, onNavigate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <QuickActions onNavigate={onNavigate} />
       <OnboardingChecklist core={core} onNavigate={onNavigate} />
       <Card
         style={{
@@ -1836,24 +1890,49 @@ function Dashboard({ core, profile, onNavigate }) {
             value: last7.length,
             unit: "sessões",
             trend: hasPrevData ? last7.length - prev7.length : null,
+            icon: Dumbbell,
+            color: T.coral,
           },
           {
             label: "Duração total",
             value: totalDuration,
             unit: "min",
             trend: hasPrevData ? totalDuration - prevDuration : null,
+            icon: Clock,
+            color: T.steel,
           },
-          ...(showDistance ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km", trend: null }] : []),
+          ...(showDistance
+            ? [{ label: "Distância total", value: totalDistance.toFixed(1), unit: "km", trend: null, icon: MapPin, color: T.good }]
+            : []),
           {
             label: "PSE médio",
             value: avgEffort !== null ? avgEffort.toFixed(1) : "—",
             unit: "/10",
             trend: avgEffort !== null && prevAvgEffort !== null ? avgEffort - prevAvgEffort : null,
             neutral: true,
+            icon: Gauge,
+            color: T.gold,
           },
         ].map((s) => (
           <Card key={s.label} style={{ padding: 14 }}>
-            <Label>{s.label}</Label>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 7,
+                  background: `${s.color}18`,
+                  border: `1px solid ${s.color}40`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <s.icon size={13} color={s.color} />
+              </div>
+              <Label>{s.label}</Label>
+            </div>
             <div style={{ fontFamily: "Bebas Neue", fontSize: 32, color: T.textPrimary }}>
               {s.value}
               <span style={{ fontFamily: "Inter", fontSize: 13, color: T.textMuted, marginLeft: 5 }}>
@@ -6210,7 +6289,7 @@ export default function App() {
         fullscreenSupported={fullscreenSupported}
       />
       <div style={{ flex: 1, display: "flex", minWidth: 0 }}>
-        <main style={{ flex: 1, minWidth: 0, padding: "28px 32px 60px", maxWidth: 900 }}>{content}</main>
+        <main style={{ flex: 1, minWidth: 0, padding: "28px 32px 60px", maxWidth: 1100 }}>{content}</main>
         <RightRail core={core} profile={profile} />
       </div>
     </div>
