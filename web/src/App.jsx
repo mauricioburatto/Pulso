@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users } from "lucide-react";
 import { api, resolveMediaUrl, setUnauthorizedHandler } from "./api";
 
 /* ============================================================
@@ -954,6 +954,7 @@ const TABS = [
   { id: "nutricao", label: "Nutrição" },
   { id: "analise", label: "Análise IA" },
   { id: "relatorios", label: "Relatórios" },
+  { id: "comunidade", label: "Comunidade" },
 ];
 
 const TAB_ICONS = {
@@ -966,6 +967,7 @@ const TAB_ICONS = {
   nutricao: Apple,
   analise: Sparkles,
   relatorios: FileText,
+  comunidade: Users,
 };
 
 function useIsMobile(breakpoint = 900) {
@@ -4885,6 +4887,275 @@ function Relatorios({ core, updateCore, profile }) {
 }
 
 /* ============================================================
+   COMUNIDADE — amigos, pedidos e feed de atividade
+============================================================= */
+function Comunidade({ profile, setProfile }) {
+  const [friends, setFriends] = useState([]);
+  const [requests, setRequests] = useState({ received: [], sent: [] });
+  const [feed, setFeed] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendMessage, setSendMessage] = useState("");
+
+  const [sharing, setSharing] = useState(false);
+
+  async function loadAll() {
+    setLoading(true);
+    setError("");
+    try {
+      const [friendsList, requestsData, feedData] = await Promise.all([
+        api.friends.list(),
+        api.friends.listRequests(),
+        api.friends.feed(),
+      ]);
+      setFriends(friendsList);
+      setRequests(requestsData);
+      setFeed(feedData);
+    } catch (e) {
+      setError(`Não consegui carregar a comunidade agora${e && e.message ? ` (${e.message})` : ""}.`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  async function sendRequest() {
+    if (!email.trim()) return;
+    setSending(true);
+    setSendMessage("");
+    try {
+      const result = await api.friends.sendRequest(email.trim());
+      setSendMessage(result.autoAccepted ? "Vocês já eram amigos um do outro — pedido aceito automaticamente!" : "Pedido enviado!");
+      setEmail("");
+      await loadAll();
+    } catch (e) {
+      setSendMessage(e.message || "Não consegui enviar o pedido.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function acceptRequest(id) {
+    await api.friends.accept(id);
+    await loadAll();
+  }
+
+  async function declineRequest(id) {
+    await api.friends.decline(id);
+    await loadAll();
+  }
+
+  async function removeFriend(friendId) {
+    await api.friends.remove(friendId);
+    await loadAll();
+  }
+
+  async function toggleShareBodyEvolution() {
+    setSharing(true);
+    try {
+      const { shareBodyEvolution } = await api.friends.updateSettings(!profile.shareBodyEvolution);
+      setProfile({ ...profile, shareBodyEvolution });
+    } catch (e) {
+      setError(`Não consegui atualizar a preferência agora${e && e.message ? ` (${e.message})` : ""}.`);
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  if (loading) {
+    return <EmptyState title="Carregando comunidade..." hint="Só um instante." />;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Card>
+        <Label>Adicionar amigo</Label>
+        <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
+          Digite o email da conta Pulso do seu amigo pra enviar um pedido de amizade.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Input
+            placeholder="email@exemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ flex: 1, minWidth: 200 }}
+          />
+          <Btn variant="primary" onClick={sendRequest} disabled={sending || !email.trim()}>
+            {sending ? "Enviando..." : "Enviar pedido"}
+          </Btn>
+        </div>
+        {sendMessage && (
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginTop: 8 }}>{sendMessage}</div>
+        )}
+        {error && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{error}</div>}
+      </Card>
+
+      {(requests.received.length > 0 || requests.sent.length > 0) && (
+        <Card>
+          <Label>Pedidos pendentes</Label>
+          {requests.received.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+              {requests.received.map((r) => (
+                <div
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "10px 12px",
+                    background: T.bgElevated,
+                    borderRadius: 7,
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ fontFamily: "Inter", fontSize: 13.5 }}>
+                    <strong>{r.from.name}</strong> quer ser seu amigo
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <Btn variant="gold" onClick={() => acceptRequest(r.id)} style={{ height: 32 }}>
+                      aceitar
+                    </Btn>
+                    <Btn variant="ghost" onClick={() => declineRequest(r.id)} style={{ height: 32 }}>
+                      recusar
+                    </Btn>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {requests.sent.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: requests.received.length > 0 ? 12 : 10 }}>
+              {requests.sent.map((r) => (
+                <div
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "10px 12px",
+                    background: T.bgElevated,
+                    borderRadius: 7,
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ fontFamily: "Inter", fontSize: 13.5, color: T.textMuted }}>
+                    Pedido enviado para <strong style={{ color: T.textPrimary }}>{r.to.name}</strong>
+                  </div>
+                  <Btn variant="ghost" onClick={() => declineRequest(r.id)} style={{ height: 32 }}>
+                    cancelar
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card>
+        <Label>Privacidade</Label>
+        <div
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8 }}
+        >
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, maxWidth: 460 }}>
+            Por padrão, seus amigos só veem seus treinos. Ative abaixo se quiser que eles também vejam sua evolução
+            física mais recente (peso e % de gordura).
+          </div>
+          <Btn
+            variant={profile.shareBodyEvolution ? "gold" : "ghost"}
+            onClick={toggleShareBodyEvolution}
+            disabled={sharing}
+            style={{ flexShrink: 0 }}
+          >
+            {profile.shareBodyEvolution ? "Compartilhando evolução ✓" : "Compartilhar evolução física"}
+          </Btn>
+        </div>
+      </Card>
+
+      <Card>
+        <Label>Meus amigos</Label>
+        {friends.length === 0 ? (
+          <EmptyState title="Nenhum amigo ainda" hint="Envie um pedido pelo email acima." />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+            {friends.map((f) => (
+              <div
+                key={f.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  background: T.bgElevated,
+                  borderRadius: 7,
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13.5 }}>{f.name}</div>
+                <Btn variant="danger" onClick={() => removeFriend(f.id)} style={{ height: 32 }}>
+                  remover
+                </Btn>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <Label>Atividade dos amigos</Label>
+        {feed.length === 0 ? (
+          <EmptyState
+            title="Nenhuma atividade ainda"
+            hint="Assim que seus amigos registrarem treinos, eles aparecem aqui."
+          />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+            {feed.map((item, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  background: T.bgElevated,
+                  borderRadius: 7,
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontFamily: "Inter", fontSize: 13.5 }}>
+                  {item.type === "training" ? (
+                    <>
+                      <strong>{item.friend.name}</strong> treinou {item.training.type}
+                      {item.training.duration ? ` — ${item.training.duration}min` : ""}
+                      {item.training.distance ? ` — ${item.training.distance}km` : ""}
+                    </>
+                  ) : (
+                    <>
+                      <strong>{item.friend.name}</strong> atualizou a evolução física
+                      {item.assessment.weight ? ` — ${item.assessment.weight}kg` : ""}
+                      {item.assessment.fatPercent ? ` — ${item.assessment.fatPercent}% gordura` : ""}
+                    </>
+                  )}
+                </div>
+                <Pill color={item.type === "training" ? T.steel : T.gold}>
+                  {new Date(item.date).toLocaleDateString("pt-BR")}
+                </Pill>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================
    APP ROOT
 ============================================================= */
 export default function App() {
@@ -4999,6 +5270,7 @@ export default function App() {
       {active === "nutricao" && <Nutricao core={core} updateCore={updateCore} profile={profile} />}
       {active === "analise" && <AnaliseIA core={core} updateCore={updateCore} profile={profile} />}
       {active === "relatorios" && <Relatorios core={core} updateCore={updateCore} profile={profile} />}
+      {active === "comunidade" && <Comunidade profile={profile} setProfile={setProfile} />}
     </>
   );
 

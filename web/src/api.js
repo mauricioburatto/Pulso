@@ -85,6 +85,18 @@ export const api = {
   },
   deletePhoto: (id) => apiFetch(`/athlete/photos/${id}`, { method: 'DELETE' }),
 
+  friends: {
+    list: () => apiFetch('/friends').then((d) => d.friends),
+    listRequests: () => apiFetch('/friends/requests'),
+    sendRequest: (email) => apiFetch('/friends/requests', { method: 'POST', body: { email } }),
+    accept: (id) => apiFetch(`/friends/requests/${id}/accept`, { method: 'POST' }),
+    decline: (id) => apiFetch(`/friends/requests/${id}/decline`, { method: 'POST' }),
+    remove: (friendId) => apiFetch(`/friends/${friendId}`, { method: 'DELETE' }),
+    feed: () => apiFetch('/friends/feed').then((d) => d.feed),
+    updateSettings: (shareBodyEvolution) =>
+      apiFetch('/friends/settings', { method: 'PATCH', body: { shareBodyEvolution } }),
+  },
+
   ai: {
     lerPrintTreino: (payload) => apiFetch('/ai/ler-print-treino', { method: 'POST', body: payload }),
     interpretarTreinoTexto: (payload) => apiFetch('/ai/interpretar-treino-texto', { method: 'POST', body: payload }),
