@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users, MapPin, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPulse, StickyNote, Maximize, Minimize, Eye, EyeOff, Home, Target, RefreshCw, Pill as PillIcon, Apple, Sparkles, FileText, Menu, X, Mic, Users, MapPin, Check, Settings } from "lucide-react";
 import { api, resolveMediaUrl, setUnauthorizedHandler } from "./api";
 import { startRouteTracking, routeDistanceKm, isNativePlatform } from "./geo";
 import { TERMOS_DE_USO, POLITICA_PRIVACIDADE } from "./legal";
@@ -1248,6 +1248,7 @@ const TABS = [
   { id: "analise", label: "Análise IA" },
   { id: "relatorios", label: "Relatórios" },
   { id: "comunidade", label: "Comunidade" },
+  { id: "ajustes", label: "Ajustes" },
 ];
 
 const TAB_ICONS = {
@@ -1261,6 +1262,7 @@ const TAB_ICONS = {
   analise: Sparkles,
   relatorios: FileText,
   comunidade: Users,
+  ajustes: Settings,
 };
 
 function useIsMobile(breakpoint = 900) {
@@ -5796,6 +5798,257 @@ function Comunidade({ profile, setProfile }) {
 }
 
 /* ============================================================
+   AJUSTES — editar perfil, senha, privacidade e conta
+============================================================= */
+function Ajustes({ profile, setProfile, onNavigate, onAccountDeleted }) {
+  const [name, setName] = useState(profile.name || "");
+  const [username, setUsername] = useState(profile.username || "");
+  const [birthDate, setBirthDate] = useState(profile.birthDate || "");
+  const [sex, setSex] = useState(profile.sex || "Feminino");
+  const [weight, setWeight] = useState(profile.weight || "");
+  const [height, setHeight] = useState(profile.height || "");
+  const [level, setLevel] = useState(profile.level || "Amador");
+  const [trainingTime, setTrainingTime] = useState(profile.trainingTime || "1 ano ou menos");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+  const [profileError, setProfileError] = useState("");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  async function saveProfile() {
+    setProfileError("");
+    setProfileMsg("");
+    if (!name.trim() || !username.trim()) {
+      setProfileError("Nome e nome de usuário não podem ficar em branco.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.]{3,24}$/.test(username.trim())) {
+      setProfileError("Nome de usuário deve ter de 3 a 24 caracteres, usando apenas letras, números, ponto ou underscore.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const updated = await api.updateProfile({
+        name: name.trim(),
+        username: username.trim(),
+        birthDate: birthDate || null,
+        sex,
+        weight: weight ? Number(String(weight).replace(",", ".")) : null,
+        height: height ? Number(String(height).replace(",", ".")) : null,
+        level,
+        trainingTime,
+      });
+      setProfile(updated);
+      setProfileMsg("Perfil atualizado!");
+    } catch (e) {
+      setProfileError(e && e.message ? e.message : "Não consegui salvar agora.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function changePassword() {
+    setPasswordError("");
+    setPasswordMsg("");
+    if (!currentPassword || !newPassword) {
+      setPasswordError("Preencha a senha atual e a nova senha.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("A nova senha precisa ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("A confirmação não bate com a nova senha.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.changePassword({ currentPassword, newPassword });
+      setPasswordMsg("Senha alterada com sucesso!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (e) {
+      setPasswordError(e && e.message ? e.message : "Não consegui alterar a senha agora.");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function deleteAccount() {
+    setDeleteError("");
+    if (deleteConfirmText.trim().toLowerCase() !== (profile.username || profile.email).toLowerCase()) {
+      setDeleteError("Digite exatamente como pedido acima pra confirmar.");
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      onAccountDeleted();
+    } catch (e) {
+      setDeleteError(e && e.message ? e.message : "Não consegui excluir a conta agora.");
+      setDeleting(false);
+    }
+  }
+
+  const deleteConfirmTarget = profile.username || profile.email;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Card>
+        <Label>Editar perfil</Label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Input placeholder="Nome completo" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input placeholder="Nome de usuário" value={username} onChange={(e) => setUsername(e.target.value)} />
+          </div>
+          <div style={{ fontFamily: "Inter", fontSize: 11, color: T.textMuted }}>Email: {profile.email} (não editável)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+            <Select value={sex} onChange={(e) => setSex(e.target.value)}>
+              <option>Feminino</option>
+              <option>Masculino</option>
+            </Select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="Peso (kg)"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="Altura (m)"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Select value={level} onChange={(e) => setLevel(e.target.value)}>
+              <option>Amador</option>
+              <option>Semi-amador</option>
+              <option>Semi-profissional</option>
+            </Select>
+            <Select value={trainingTime} onChange={(e) => setTrainingTime(e.target.value)}>
+              <option>1 ano ou menos</option>
+              <option>1 a 2 anos</option>
+              <option>2 anos ou mais</option>
+            </Select>
+          </div>
+          <div>
+            <Btn variant="primary" onClick={saveProfile} disabled={savingProfile}>
+              {savingProfile ? "Salvando..." : "Salvar alterações"}
+            </Btn>
+          </div>
+          {profileMsg && <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.good }}>{profileMsg}</div>}
+          {profileError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5 }}>{profileError}</div>}
+        </div>
+      </Card>
+
+      <Card>
+        <Label>Alterar senha</Label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, maxWidth: 380 }}>
+          <PasswordInput
+            placeholder="Senha atual"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+          <PasswordInput
+            placeholder="Nova senha (mín. 8 caracteres)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <PasswordInput
+            placeholder="Confirmar nova senha"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+          />
+          <div>
+            <Btn variant="primary" onClick={changePassword} disabled={changingPassword}>
+              {changingPassword ? "Alterando..." : "Alterar senha"}
+            </Btn>
+          </div>
+          {passwordMsg && <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.good }}>{passwordMsg}</div>}
+          {passwordError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5 }}>{passwordError}</div>}
+        </div>
+      </Card>
+
+      <Card>
+        <Label>Privacidade</Label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, maxWidth: 460 }}>
+            O controle de quais dados seus amigos podem ver (treinos, evolução física) fica na aba Comunidade.
+          </div>
+          {onNavigate && (
+            <Btn variant="ghost" onClick={() => onNavigate("comunidade")}>
+              Ir para Comunidade
+            </Btn>
+          )}
+        </div>
+      </Card>
+
+      <Card style={{ borderColor: T.danger + "40" }}>
+        <Label>Zona de risco</Label>
+        {!showDeleteConfirm ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+            <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, maxWidth: 460 }}>
+              Excluir sua conta apaga permanentemente todos os seus dados — treinos, fotos, avaliações, dieta,
+              amizades. Não tem como desfazer.
+            </div>
+            <Btn variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+              Excluir minha conta
+            </Btn>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
+              Pra confirmar, digite <strong style={{ color: T.textPrimary }}>{deleteConfirmTarget}</strong> abaixo.
+              Essa ação é permanente.
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Input
+                placeholder={deleteConfirmTarget}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                style={{ flex: 1, minWidth: 200 }}
+              />
+              <Btn variant="danger" onClick={deleteAccount} disabled={deleting}>
+                {deleting ? "Excluindo..." : "Confirmar exclusão"}
+              </Btn>
+              <Btn
+                variant="ghost"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText("");
+                  setDeleteError("");
+                }}
+              >
+                Cancelar
+              </Btn>
+            </div>
+            {deleteError && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{deleteError}</div>}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================
    APP ROOT
 ============================================================= */
 export default function App() {
@@ -5833,6 +6086,11 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     api.logout().catch(() => {});
+    setProfile(null);
+    setCore(null);
+  }, []);
+
+  const handleAccountDeleted = useCallback(() => {
     setProfile(null);
     setCore(null);
   }, []);
@@ -5911,6 +6169,9 @@ export default function App() {
       {active === "analise" && <AnaliseIA core={core} updateCore={updateCore} profile={profile} />}
       {active === "relatorios" && <Relatorios core={core} updateCore={updateCore} profile={profile} />}
       {active === "comunidade" && <Comunidade profile={profile} setProfile={setProfile} />}
+      {active === "ajustes" && (
+        <Ajustes profile={profile} setProfile={setProfile} onNavigate={setActive} onAccountDeleted={handleAccountDeleted} />
+      )}
     </>
   );
 

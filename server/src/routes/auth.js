@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const prisma = require('../prisma');
 const { sendEmail } = require('../email');
-const { SESSION_COOKIE } = require('../middleware/requireAuth');
+const { SESSION_COOKIE, requireAuth } = require('../middleware/requireAuth');
 
 const router = express.Router();
 
@@ -263,4 +263,29 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
   res.json({ message: 'Senha redefinida com sucesso.' });
 });
 
-module.exports = { router, publicAccount };
+router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'A nova senha deve ter pelo menos 8 caracteres.' });
+  }
+
+  const account = await prisma.account.findUnique({ where: { id: req.accountId } });
+  if (!account) {
+    return res.status(404).json({ error: 'Conta não encontrada.' });
+  }
+
+  const valid = await bcrypt.compare(currentPassword, account.passwordHash);
+  if (!valid) {
+    return res.status(401).json({ error: 'Senha atual incorreta.' });
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await prisma.account.update({ where: { id: account.id }, data: { passwordHash } });
+
+  res.json({ message: 'Senha alterada com sucesso.' });
+});
+
+module.exports = { router, publicAccount, USERNAME_PATTERN, SESSION_COOKIE_OPTIONS };
