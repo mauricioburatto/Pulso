@@ -8,24 +8,51 @@ datasource db {
 }
 
 model Account {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  modality     String?
-  level        String?
-  weight       Float?
-  height       Float?
-  trainingTime String?  @map("training_time")
-  birthDate    DateTime? @map("birth_date")
-  sex          String?
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(uuid())
+  name               String
+  email              String   @unique
+  passwordHash       String   @map("password_hash")
+  modality           String?
+  level              String?
+  weight             Float?
+  height             Float?
+  trainingTime       String?  @map("training_time")
+  birthDate          DateTime? @map("birth_date")
+  sex                String?
+  shareBodyEvolution Boolean  @default(false) @map("share_body_evolution")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  athleteCore         AthleteCore?
-  athletePhotos       AthletePhoto[]
-  passwordResetTokens PasswordResetToken[]
+  athleteCore            AthleteCore?
+  athletePhotos          AthletePhoto[]
+  passwordResetTokens    PasswordResetToken[]
+  sentFriendRequests     Friendship[] @relation("FriendshipRequester")
+  receivedFriendRequests Friendship[] @relation("FriendshipAddressee")
 
   @@map("accounts")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+// Modela pedido + aceite mútuo de amizade. Uma linha ACCEPTED representa a
+// amizade em si (não importa mais quem pediu); uma PENDING é um convite em
+// aberto esperando resposta do addressee.
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String           @map("requester_id")
+  requester   Account          @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String           @map("addressee_id")
+  addressee   Account          @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  respondedAt DateTime?        @map("responded_at")
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
+  @@map("friendships")
 }
 
 model AthleteCore {

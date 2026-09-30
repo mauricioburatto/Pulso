@@ -5,6 +5,7 @@ const { router: authRouter } = require('./routes/auth');
 const meRouter = require('./routes/me');
 const athleteCoreRouter = require('./routes/athleteCore');
 const athletePhotosRouter = require('./routes/athletePhotos');
+const friendsRouter = require('./routes/friends');
 const aiRouter = require('./routes/ai');
 const storage = require('./storage');
 
@@ -41,6 +42,7 @@ app.use('/auth', authRouter);
 app.use('/me', meRouter);
 app.use('/athlete/core', athleteCoreRouter);
 app.use('/athlete/photos', athletePhotosRouter);
+app.use('/friends', friendsRouter);
 app.use('/ai', aiRouter);
 
 app.use((err, req, res, next) => {
