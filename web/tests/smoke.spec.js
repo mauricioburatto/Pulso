@@ -16,6 +16,7 @@ const TABS = [
   'Análise IA',
   'Relatórios',
   'Comunidade',
+  'Ajustes',
 ];
 
 test('signup e navegação por todas as abas sem erros', async ({ page }) => {
