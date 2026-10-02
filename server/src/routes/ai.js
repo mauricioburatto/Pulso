@@ -98,7 +98,7 @@ router.post(
 router.post(
   '/gerar-planilha',
   asyncRoute(async (req, res) => {
-    const { profile, focusModality, others, nextGoal, latestAssessment, preferences, recentTrainings, weeks, toGoal } =
+    const { profile, focusModality, others, nextGoal, latestAssessment, latestLevelTest, preferences, recentTrainings, weeks, toGoal } =
       req.body;
 
     if (!profile || !focusModality || !focusModality.name) {
@@ -112,7 +112,16 @@ router.post(
     const cappedWeeks = weeksToGoal ? Math.min(weeksToGoal, 2) : Math.min(weeks || 2, 2);
     const isCapped = weeksToGoal && weeksToGoal > cappedWeeks;
 
-    const system = `Você é um treinador esportivo. Gere uma planilha de treinos com foco em uma modalidade principal, considerando também outras modalidades que o atleta já pratica em paralelo (para não sobrecarregar, sem duplicar o trabalho delas). Respeite fielmente qualquer preferência ou restrição que o atleta informar (ex: "não fazer treino de tiro" significa nunca incluir esse tipo de sessão). Responda APENAS com um array JSON compacto, sem texto antes ou depois, sem markdown, sem espaços desnecessários. Cada item: {"date":"YYYY-MM-DD","modality":"nome curto da modalidade deste treino (uma das informadas, ou 'Descanso')","title":"até 4 palavras","description":"até 8 palavras, telegráfico, sem frase completa","intensity":"leve|moderado|alto"}. Pode haver mais de um item na mesma data se fizer sentido (ex: foco + outra modalidade leve), ou um único item "Descanso". Seja extremamente econômico em texto — isso é crítico, a resposta tem limite curto de tamanho.`;
+    const levelTestLine =
+      latestLevelTest && latestLevelTest.timeSeconds
+        ? (() => {
+            const m = Math.floor(latestLevelTest.timeSeconds / 60);
+            const s = Math.round(latestLevelTest.timeSeconds % 60);
+            return `Teste de nível do atleta: ${latestLevelTest.distanceKm || 1}km ao máximo em ${m}:${String(s).padStart(2, '0')} (feito em ${latestLevelTest.date ? String(latestLevelTest.date).slice(0, 10) : 'data não informada'}). Use esse resultado pra calcular os ritmos de treino (fácil, moderado, forte/limiar) em min/km — inclua o ritmo alvo na descrição de cada sessão de corrida com pace definido (ex: "6x400m a 4:30/km").`;
+          })()
+        : '';
+
+    const system = `Você é um treinador esportivo. Gere uma planilha de treinos com foco em uma modalidade principal, considerando também outras modalidades que o atleta já pratica em paralelo (para não sobrecarregar, sem duplicar o trabalho delas). Respeite fielmente qualquer preferência ou restrição que o atleta informar (ex: "não fazer treino de tiro" significa nunca incluir esse tipo de sessão). Quando houver um teste de nível (tempo num teste de corrida), use-o pra calcular ritmos de treino reais em min/km e inclua esses ritmos na descrição das sessões de corrida, em vez de só intensidade genérica. Responda APENAS com um array JSON compacto, sem texto antes ou depois, sem markdown, sem espaços desnecessários. Cada item: {"date":"YYYY-MM-DD","modality":"nome curto da modalidade deste treino (uma das informadas, ou 'Descanso')","title":"até 4 palavras","description":"até 8 palavras, telegráfico, sem frase completa","intensity":"leve|moderado|alto"}. Pode haver mais de um item na mesma data se fizer sentido (ex: foco + outra modalidade leve), ou um único item "Descanso". Seja extremamente econômico em texto — isso é crítico, a resposta tem limite curto de tamanho.`;
 
     const userMsg = `Atleta: ${profile.name}, nível ${profile.level}.
 Foco desta planilha: ${focusModality.name} (${focusModality.frequency}).${
@@ -120,6 +129,7 @@ Foco desta planilha: ${focusModality.name} (${focusModality.frequency}).${
     }
 ${othersList.length ? `Também pratica em paralelo: ${othersList.map((m) => `${m.name} (${m.frequency})`).join(', ')}.` : 'Sem outras modalidades cadastradas.'}
 ${latestAssessment ? `Avaliação do treino atual do atleta (mais confiável que o nível autodeclarado): nível real ${latestAssessment.estimatedLevel}, dificuldade: ${latestAssessment.difficultySummary || '—'}. Lacunas a corrigir: ${latestAssessment.gaps || 'nenhuma relatada'}. Calibre a intensidade e complexidade da planilha por este nível real, não pelo autodeclarado.` : ''}
+${levelTestLine}
 ${preferences && preferences.trim() ? `Preferências/restrições do atleta para esta planilha: ${preferences.trim()}.` : ''}
 ${recent.length ? `Treinos recentes: ${JSON.stringify(recent)}` : ''}
 Gere ${cappedWeeks} semana(s) a partir de ${new Date().toISOString().slice(0, 10)}.${

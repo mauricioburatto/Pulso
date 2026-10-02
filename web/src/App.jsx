@@ -150,6 +150,7 @@ const emptyCore = () => ({
   analyses: [],
   bodyAssessments: [],
   trainingAssessments: [],
+  levelTests: [],
   diet: {
     targetKcal: "",
     targetProtein: "",
@@ -2532,6 +2533,106 @@ function TreinoAtualImport({ core, updateCore, profile }) {
   );
 }
 
+function paceFromSeconds(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.round(totalSeconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function TesteNivelCorrida({ core, updateCore }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [minutes, setMinutes] = useState("");
+  const [seconds, setSeconds] = useState("");
+  const [error, setError] = useState("");
+
+  const tests = core.levelTests || [];
+  const sorted = [...tests].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  function saveTest() {
+    setError("");
+    const m = Number(minutes || 0);
+    const s = Number(seconds || 0);
+    if ((!minutes && !seconds) || isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60 || m * 60 + s <= 0) {
+      setError("Informe o tempo do teste (minutos e segundos).");
+      return;
+    }
+    const test = {
+      id: "lt_" + Date.now(),
+      modality: "Corrida de rua",
+      distanceKm: 1,
+      date,
+      timeSeconds: m * 60 + s,
+    };
+    updateCore({ ...core, levelTests: [test, ...tests] });
+    setMinutes("");
+    setSeconds("");
+  }
+
+  function removeTest(id) {
+    updateCore({ ...core, levelTests: tests.filter((t) => t.id !== id) });
+  }
+
+  return (
+    <Card>
+      <Label>Teste de nível — 1km ao máximo</Label>
+      <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+        Corra 1km no seu ritmo máximo sustentável e registre o tempo. A IA usa esse resultado pra calibrar os ritmos
+        de treino na planilha de corrida — é bem mais preciso do que estimar só pelo nível declarado.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+        <div>
+          <Label>Data do teste</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div>
+          <Label>Minutos</Label>
+          <Input inputMode="numeric" placeholder="4" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        </div>
+        <div>
+          <Label>Segundos</Label>
+          <Input inputMode="numeric" placeholder="30" value={seconds} onChange={(e) => setSeconds(e.target.value)} />
+        </div>
+        <Btn variant="gold" onClick={saveTest}>
+          Salvar teste
+        </Btn>
+      </div>
+      {error && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{error}</div>}
+
+      {sorted.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+          {sorted.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "9px 12px",
+                background: T.bgElevated,
+                borderRadius: 7,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontFamily: "Bebas Neue", fontSize: 22, color: T.textPrimary }}>
+                  {paceFromSeconds(t.timeSeconds)}
+                </span>
+                <span style={{ fontFamily: "Inter", fontSize: 12, color: T.textMuted }}>min/km</span>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{t.date}</span>
+              </div>
+              <button
+                onClick={() => removeTest(t.id)}
+                style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}
+              >
+                remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function Treinos({ core, updateCore, profile }) {
   const [subTab, setSubTab] = useState("planejar"); // "planejar" | "registrar" | "historico"
   const [form, setForm] = useState({
@@ -2702,6 +2803,8 @@ function Treinos({ core, updateCore, profile }) {
 
       const others = modalities.filter((m) => m.id !== focusId);
       const latestAssessment = (core.trainingAssessments || [])[0];
+      const isRunningFocus = focusModality.name.toLowerCase().includes("corrida");
+      const latestLevelTest = isRunningFocus ? (core.levelTests || [])[0] : null;
 
       const { plannedWorkouts, truncated } = await api.ai.gerarPlanilha({
         profile: { name: profile.name, level: profile.level },
@@ -2716,6 +2819,9 @@ function Treinos({ core, updateCore, profile }) {
               difficultySummary: latestAssessment.difficultySummary,
               gaps: latestAssessment.gaps,
             }
+          : null,
+        latestLevelTest: latestLevelTest
+          ? { distanceKm: latestLevelTest.distanceKm, timeSeconds: latestLevelTest.timeSeconds, date: latestLevelTest.date }
           : null,
         preferences: preferences.trim(),
         recentTrainings: recent,
@@ -2802,6 +2908,8 @@ function Treinos({ core, updateCore, profile }) {
       <ModalidadesManager core={core} updateCore={updateCore} profile={profile} />
 
       <TreinoAtualImport core={core} updateCore={updateCore} profile={profile} />
+
+      <TesteNivelCorrida core={core} updateCore={updateCore} />
 
       <Card>
         <Label>Montar planilha de treino</Label>
