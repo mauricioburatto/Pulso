@@ -4452,7 +4452,7 @@ function BodyReport({ assessment, previous, profile }) {
   );
 }
 
-function FrontPoseIllustration({ size = 120 }) {
+function FrontPoseIllustration({ size = 170 }) {
   return (
     <div style={{ width: size, height: size, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
       <img src={poseFrente} alt="Pose de frente para a foto" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
@@ -4460,7 +4460,7 @@ function FrontPoseIllustration({ size = 120 }) {
   );
 }
 
-function SidePoseIllustration({ size = 120 }) {
+function SidePoseIllustration({ size = 170 }) {
   return (
     <div style={{ width: size, height: size, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
       <img src={poseLado} alt="Pose de lado para a foto" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
@@ -4576,7 +4576,7 @@ function AvaliacaoFisica({ athleteId, profile, core, updateCore }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <Card>
         <Label>Protocolo para as fotos</Label>
-        <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap", margin: "10px 0" }}>
+        <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", margin: "10px 0" }}>
           <div style={{ textAlign: "center" }}>
             <FrontPoseIllustration />
           </div>
@@ -4602,7 +4602,7 @@ function AvaliacaoFisica({ athleteId, profile, core, updateCore }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginTop: 8 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <FrontPoseIllustration size={54} />
+              <FrontPoseIllustration size={64} />
               <div style={{ fontFamily: "Inter", fontSize: 12.5, fontWeight: 600 }}>Foto de frente</div>
             </div>
             <input ref={frontRef} type="file" accept="image/*" onChange={(e) => handleFront(e.target.files[0])} style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }} />
@@ -4612,7 +4612,7 @@ function AvaliacaoFisica({ athleteId, profile, core, updateCore }) {
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <SidePoseIllustration size={54} />
+              <SidePoseIllustration size={64} />
               <div style={{ fontFamily: "Inter", fontSize: 12.5, fontWeight: 600 }}>Foto de lado (direito)</div>
             </div>
             <input ref={sideRef} type="file" accept="image/*" onChange={(e) => handleSide(e.target.files[0])} style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted }} />
