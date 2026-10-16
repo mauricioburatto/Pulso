@@ -4454,7 +4454,7 @@ function BodyReport({ assessment, previous, profile }) {
 
 function FrontPoseIllustration({ size = 120 }) {
   return (
-    <div style={{ width: size, height: size * 1.6, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }}>
+    <div style={{ width: size, height: size, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
       <img src={poseFrente} alt="Pose de frente para a foto" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
     </div>
   );
@@ -4462,7 +4462,7 @@ function FrontPoseIllustration({ size = 120 }) {
 
 function SidePoseIllustration({ size = 120 }) {
   return (
-    <div style={{ width: size, height: size * 1.6, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }}>
+    <div style={{ width: size, height: size, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
       <img src={poseLado} alt="Pose de lado para a foto" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
     </div>
   );
@@ -4579,11 +4579,9 @@ function AvaliacaoFisica({ athleteId, profile, core, updateCore }) {
         <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap", margin: "10px 0" }}>
           <div style={{ textAlign: "center" }}>
             <FrontPoseIllustration />
-            <div style={{ fontFamily: "Inter", fontSize: 11.5, fontWeight: 600, color: T.textMuted, marginTop: 6 }}>Frente</div>
           </div>
           <div style={{ textAlign: "center" }}>
             <SidePoseIllustration />
-            <div style={{ fontFamily: "Inter", fontSize: 11.5, fontWeight: 600, color: T.textMuted, marginTop: 6 }}>Lado direito</div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
