@@ -3,6 +3,8 @@ import { ChevronDown, ChevronRight, Flame, Dumbbell, Wind, Clock, Gauge, HeartPu
 import { api, resolveMediaUrl, setUnauthorizedHandler } from "./api";
 import { startRouteTracking, routeDistanceKm, isNativePlatform } from "./geo";
 import { TERMOS_DE_USO, POLITICA_PRIVACIDADE } from "./legal";
+import poseFrente from "./assets/pose-frente.png";
+import poseLado from "./assets/pose-lado.png";
 
 /* ============================================================
    DESIGN TOKENS
@@ -4452,42 +4454,17 @@ function BodyReport({ assessment, previous, profile }) {
 
 function FrontPoseIllustration({ size = 120 }) {
   return (
-    <svg width={size} height={size * 1.6} viewBox="0 0 120 192" fill="none">
-      <rect x="0" y="0" width="120" height="192" rx="10" fill={T.bgElevated} />
-      {/* cabeça */}
-      <circle cx="60" cy="30" r="14" fill="none" stroke={T.coral} strokeWidth="2.5" />
-      {/* tronco */}
-      <path d="M46 44 L44 108 L76 108 L74 44 Z" fill="none" stroke={T.coral} strokeWidth="2.5" strokeLinejoin="round" />
-      {/* braços afastados, palmas para frente */}
-      <line x1="46" y1="52" x2="14" y2="72" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="74" y1="52" x2="106" y2="72" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="11" cy="75" r="4" fill="none" stroke={T.gold} strokeWidth="2" />
-      <circle cx="109" cy="75" r="4" fill="none" stroke={T.gold} strokeWidth="2" />
-      {/* pernas afastadas */}
-      <line x1="52" y1="108" x2="38" y2="176" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="68" y1="108" x2="82" y2="176" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-      {/* setas indicando afastamento */}
-      <line x1="20" y1="90" x2="42" y2="90" stroke={T.textMuted} strokeWidth="1.2" strokeDasharray="2 2" />
-      <line x1="78" y1="90" x2="100" y2="90" stroke={T.textMuted} strokeWidth="1.2" strokeDasharray="2 2" />
-    </svg>
+    <div style={{ width: size, height: size * 1.6, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }}>
+      <img src={poseFrente} alt="Pose de frente para a foto" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+    </div>
   );
 }
 
 function SidePoseIllustration({ size = 120 }) {
   return (
-    <svg width={size} height={size * 1.6} viewBox="0 0 120 192" fill="none">
-      <rect x="0" y="0" width="120" height="192" rx="10" fill={T.bgElevated} />
-      {/* cabeça de perfil */}
-      <circle cx="55" cy="30" r="14" fill="none" stroke={T.coral} strokeWidth="2.5" />
-      {/* tronco de perfil */}
-      <path d="M48 44 L45 108 L62 108 L58 44 Z" fill="none" stroke={T.coral} strokeWidth="2.5" strokeLinejoin="round" />
-      {/* braço direito erguido à frente */}
-      <line x1="58" y1="54" x2="104" y2="46" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="107" cy="45" r="4" fill="none" stroke={T.gold} strokeWidth="2" />
-      {/* perna única visível (perfil) */}
-      <line x1="52" y1="108" x2="48" y2="176" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="48" y1="176" x2="66" y2="180" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
+    <div style={{ width: size, height: size * 1.6, borderRadius: 10, background: T.bgElevated, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }}>
+      <img src={poseLado} alt="Pose de lado para a foto" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+    </div>
   );
 }
 
@@ -4511,6 +4488,11 @@ const BODY_PROTOCOL_STEPS = [
     title: "Câmera e ambiente",
     detail:
       "Câmera na altura do tronco, bem de frente, sem inclinar pra cima, pra baixo ou de lado. Apoie o celular em algum lugar e não o mova entre uma foto e outra. Luz clara, sem gerar sombra do corpo no fundo. Fundo neutro, sem quadros ou TV ligada atrás.",
+  },
+  {
+    title: "Erros comuns a evitar",
+    detail:
+      "Na de frente: braços colados ao corpo, óculos, relógio, shorts largos ou chinelos. Na de lado: levantar os dois braços em vez de só o direito, dedos abertos em vez de unidos, deixar a perna ou o braço esquerdo aparecer, ou virar a palma da mão pro chão em vez das costas da mão pra câmera.",
   },
 ];
 
