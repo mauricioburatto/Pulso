@@ -2545,7 +2545,8 @@ function TesteNivelCorrida({ core, updateCore }) {
   const [seconds, setSeconds] = useState("");
   const [error, setError] = useState("");
 
-  const tests = core.levelTests || [];
+  const allTests = core.levelTests || [];
+  const tests = allTests.filter((t) => t.modality === "Corrida de rua");
   const sorted = [...tests].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   function saveTest() {
@@ -2559,17 +2560,18 @@ function TesteNivelCorrida({ core, updateCore }) {
     const test = {
       id: "lt_" + Date.now(),
       modality: "Corrida de rua",
+      kind: "corrida_1km",
       distanceKm: 1,
       date,
       timeSeconds: m * 60 + s,
     };
-    updateCore({ ...core, levelTests: [test, ...tests] });
+    updateCore({ ...core, levelTests: [test, ...allTests] });
     setMinutes("");
     setSeconds("");
   }
 
   function removeTest(id) {
-    updateCore({ ...core, levelTests: tests.filter((t) => t.id !== id) });
+    updateCore({ ...core, levelTests: allTests.filter((t) => t.id !== id) });
   }
 
   return (
@@ -2631,6 +2633,456 @@ function TesteNivelCorrida({ core, updateCore }) {
       )}
     </Card>
   );
+}
+
+function TesteNivelCiclismo({ core, updateCore }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [distanceKm, setDistanceKm] = useState("10");
+  const [minutes, setMinutes] = useState("");
+  const [seconds, setSeconds] = useState("");
+  const [error, setError] = useState("");
+
+  const allTests = core.levelTests || [];
+  const tests = allTests.filter((t) => t.modality === "Ciclismo");
+  const sorted = [...tests].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  function saveTest() {
+    setError("");
+    const d = Number(distanceKm || 0);
+    const m = Number(minutes || 0);
+    const s = Number(seconds || 0);
+    if (!d || d <= 0 || (!minutes && !seconds) || isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60 || m * 60 + s <= 0) {
+      setError("Informe a distância e o tempo do teste.");
+      return;
+    }
+    const test = {
+      id: "lt_" + Date.now(),
+      modality: "Ciclismo",
+      kind: "ciclismo_tt",
+      distanceKm: d,
+      date,
+      timeSeconds: m * 60 + s,
+    };
+    updateCore({ ...core, levelTests: [test, ...allTests] });
+    setMinutes("");
+    setSeconds("");
+  }
+
+  function removeTest(id) {
+    updateCore({ ...core, levelTests: allTests.filter((t) => t.id !== id) });
+  }
+
+  return (
+    <Card>
+      <Label>Teste de nível — contrarrelógio de bike</Label>
+      <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+        Pedale uma distância fixa no ritmo máximo sustentável (ex: 10km) e registre o tempo. A IA usa a velocidade
+        média pra calibrar as faixas de treino de ciclismo (recuperação, moderado, limiar).
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+        <div>
+          <Label>Data do teste</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div>
+          <Label>Distância (km)</Label>
+          <Input inputMode="decimal" placeholder="10" value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} />
+        </div>
+        <div>
+          <Label>Minutos</Label>
+          <Input inputMode="numeric" placeholder="18" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        </div>
+        <div>
+          <Label>Segundos</Label>
+          <Input inputMode="numeric" placeholder="30" value={seconds} onChange={(e) => setSeconds(e.target.value)} />
+        </div>
+        <Btn variant="gold" onClick={saveTest}>
+          Salvar teste
+        </Btn>
+      </div>
+      {error && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{error}</div>}
+
+      {sorted.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+          {sorted.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "9px 12px",
+                background: T.bgElevated,
+                borderRadius: 7,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontFamily: "Bebas Neue", fontSize: 22, color: T.textPrimary }}>
+                  {(t.distanceKm / (t.timeSeconds / 3600)).toFixed(1)}
+                </span>
+                <span style={{ fontFamily: "Inter", fontSize: 12, color: T.textMuted }}>km/h ({t.distanceKm}km)</span>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{t.date}</span>
+              </div>
+              <button
+                onClick={() => removeTest(t.id)}
+                style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}
+              >
+                remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function TesteNivelNatacao({ core, updateCore }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [m400, setM400] = useState("");
+  const [s400, setS400] = useState("");
+  const [m200, setM200] = useState("");
+  const [s200, setS200] = useState("");
+  const [error, setError] = useState("");
+
+  const allTests = core.levelTests || [];
+  const tests = allTests.filter((t) => t.modality === "Natação");
+  const sorted = [...tests].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  function saveTest() {
+    setError("");
+    const time400Seconds = Number(m400 || 0) * 60 + Number(s400 || 0);
+    const time200Seconds = Number(m200 || 0) * 60 + Number(s200 || 0);
+    if (!time400Seconds || !time200Seconds || time400Seconds <= time200Seconds) {
+      setError("Informe os dois tempos — o do 400m precisa ser maior que o do 200m.");
+      return;
+    }
+    const test = {
+      id: "lt_" + Date.now(),
+      modality: "Natação",
+      kind: "natacao_css",
+      time400Seconds,
+      time200Seconds,
+      date,
+    };
+    updateCore({ ...core, levelTests: [test, ...allTests] });
+    setM400("");
+    setS400("");
+    setM200("");
+    setS200("");
+  }
+
+  function removeTest(id) {
+    updateCore({ ...core, levelTests: allTests.filter((t) => t.id !== id) });
+  }
+
+  return (
+    <Card>
+      <Label>Teste de nível — ritmo crítico (CSS)</Label>
+      <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+        Nade 400m e, depois de um descanso, 200m, ambos no ritmo máximo sustentável, e registre os dois tempos. A
+        diferença entre eles estima o ritmo crítico (CSS) — a IA usa isso pra calibrar os ritmos de treino de
+        natação em min/100m.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div>
+          <Label>Data do teste</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 200 }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <Label>Tempo no 400m — minutos</Label>
+            <Input inputMode="numeric" placeholder="7" value={m400} onChange={(e) => setM400(e.target.value)} />
+          </div>
+          <div>
+            <Label>Tempo no 400m — segundos</Label>
+            <Input inputMode="numeric" placeholder="30" value={s400} onChange={(e) => setS400(e.target.value)} />
+          </div>
+          <div>
+            <Label>Tempo no 200m — minutos</Label>
+            <Input inputMode="numeric" placeholder="3" value={m200} onChange={(e) => setM200(e.target.value)} />
+          </div>
+          <div>
+            <Label>Tempo no 200m — segundos</Label>
+            <Input inputMode="numeric" placeholder="20" value={s200} onChange={(e) => setS200(e.target.value)} />
+          </div>
+        </div>
+        <Btn variant="gold" onClick={saveTest} style={{ alignSelf: "flex-start" }}>
+          Salvar teste
+        </Btn>
+      </div>
+      {error && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{error}</div>}
+
+      {sorted.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+          {sorted.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "9px 12px",
+                background: T.bgElevated,
+                borderRadius: 7,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontFamily: "Bebas Neue", fontSize: 22, color: T.textPrimary }}>
+                  {paceFromSeconds((t.time400Seconds - t.time200Seconds) * 0.5)}
+                </span>
+                <span style={{ fontFamily: "Inter", fontSize: 12, color: T.textMuted }}>min/100m (CSS)</span>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{t.date}</span>
+              </div>
+              <button
+                onClick={() => removeTest(t.id)}
+                style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}
+              >
+                remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+const FORCA_EXERCISES = ["Agachamento", "Supino reto", "Levantamento terra", "Desenvolvimento", "Remada", "Outro"];
+
+function TesteNivelForca({ core, updateCore }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [exercise, setExercise] = useState(FORCA_EXERCISES[0]);
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const [error, setError] = useState("");
+
+  const allTests = core.levelTests || [];
+  const tests = allTests.filter((t) => t.modality === "Musculação / Academia");
+  const sorted = [...tests].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  function saveTest() {
+    setError("");
+    const w = Number(weight || 0);
+    const r = Number(reps || 0);
+    if (!w || w <= 0 || !r || r <= 0 || r > 15) {
+      setError("Informe a carga e as repetições (funciona melhor com até 10-12 reps).");
+      return;
+    }
+    const estimated1RM = Math.round(w * (1 + r / 30) * 10) / 10;
+    const test = {
+      id: "lt_" + Date.now(),
+      modality: "Musculação / Academia",
+      kind: "1rm",
+      exercise,
+      weight: w,
+      reps: r,
+      estimated1RM,
+      date,
+    };
+    updateCore({ ...core, levelTests: [test, ...allTests] });
+    setWeight("");
+    setReps("");
+  }
+
+  function removeTest(id) {
+    updateCore({ ...core, levelTests: allTests.filter((t) => t.id !== id) });
+  }
+
+  return (
+    <Card>
+      <Label>Teste de nível — 1RM estimado</Label>
+      <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+        Faça o máximo de repetições que conseguir com boa execução numa carga desafiadora (idealmente entre 3 e 10
+        reps). A IA estima sua carga máxima (1RM, fórmula de Epley) e usa isso pra calibrar os pesos de treino em %
+        do 1RM.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+        <div>
+          <Label>Exercício</Label>
+          <Select value={exercise} onChange={(e) => setExercise(e.target.value)}>
+            {FORCA_EXERCISES.map((ex) => (
+              <option key={ex} value={ex}>
+                {ex}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Carga (kg)</Label>
+          <Input inputMode="decimal" placeholder="60" value={weight} onChange={(e) => setWeight(e.target.value)} />
+        </div>
+        <div>
+          <Label>Repetições</Label>
+          <Input inputMode="numeric" placeholder="8" value={reps} onChange={(e) => setReps(e.target.value)} />
+        </div>
+        <Btn variant="gold" onClick={saveTest}>
+          Salvar teste
+        </Btn>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <Label>Data do teste</Label>
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 200 }} />
+      </div>
+      {error && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{error}</div>}
+
+      {sorted.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+          {sorted.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "9px 12px",
+                background: T.bgElevated,
+                borderRadius: 7,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontFamily: "Bebas Neue", fontSize: 22, color: T.textPrimary }}>{t.estimated1RM}kg</span>
+                <span style={{ fontFamily: "Inter", fontSize: 12, color: T.textMuted }}>
+                  1RM est. — {t.exercise} ({t.weight}kg x {t.reps})
+                </span>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{t.date}</span>
+              </div>
+              <button
+                onClick={() => removeTest(t.id)}
+                style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}
+              >
+                remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function TesteNivelCalistenia({ core, updateCore }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [pushups, setPushups] = useState("");
+  const [squats, setSquats] = useState("");
+  const [plankSeconds, setPlankSeconds] = useState("");
+  const [error, setError] = useState("");
+
+  const allTests = core.levelTests || [];
+  const tests = allTests.filter((t) => t.modality === "Treino em casa (calistenia/funcional)");
+  const sorted = [...tests].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  function saveTest() {
+    setError("");
+    const p = Number(pushups || 0);
+    const sq = Number(squats || 0);
+    const pl = Number(plankSeconds || 0);
+    if (!p && !sq && !pl) {
+      setError("Informe pelo menos um dos três resultados.");
+      return;
+    }
+    const test = {
+      id: "lt_" + Date.now(),
+      modality: "Treino em casa (calistenia/funcional)",
+      kind: "calistenia",
+      pushups: p || null,
+      squats: sq || null,
+      plankSeconds: pl || null,
+      date,
+    };
+    updateCore({ ...core, levelTests: [test, ...allTests] });
+    setPushups("");
+    setSquats("");
+    setPlankSeconds("");
+  }
+
+  function removeTest(id) {
+    updateCore({ ...core, levelTests: allTests.filter((t) => t.id !== id) });
+  }
+
+  return (
+    <Card>
+      <Label>Teste de nível — repetições máximas</Label>
+      <div style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>
+        Faça o máximo de flexões e agachamentos em 1 minuto cada, e segure a prancha o máximo que aguentar. A IA usa
+        esses números pra calibrar o volume e a intensidade das sessões de treino em casa.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+        <div>
+          <Label>Data do teste</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div>
+          <Label>Flexões em 1 min</Label>
+          <Input inputMode="numeric" placeholder="25" value={pushups} onChange={(e) => setPushups(e.target.value)} />
+        </div>
+        <div>
+          <Label>Agachamentos em 1 min</Label>
+          <Input inputMode="numeric" placeholder="40" value={squats} onChange={(e) => setSquats(e.target.value)} />
+        </div>
+        <div>
+          <Label>Prancha (segundos)</Label>
+          <Input inputMode="numeric" placeholder="60" value={plankSeconds} onChange={(e) => setPlankSeconds(e.target.value)} />
+        </div>
+        <Btn variant="gold" onClick={saveTest}>
+          Salvar teste
+        </Btn>
+      </div>
+      {error && <div style={{ color: T.danger, fontFamily: "Inter", fontSize: 12.5, marginTop: 8 }}>{error}</div>}
+
+      {sorted.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+          {sorted.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "9px 12px",
+                background: T.bgElevated,
+                borderRadius: 7,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                {t.pushups ? (
+                  <span style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textPrimary }}>
+                    <strong style={{ fontFamily: "Bebas Neue", fontSize: 18 }}>{t.pushups}</strong> flexões
+                  </span>
+                ) : null}
+                {t.squats ? (
+                  <span style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textPrimary }}>
+                    <strong style={{ fontFamily: "Bebas Neue", fontSize: 18 }}>{t.squats}</strong> agachamentos
+                  </span>
+                ) : null}
+                {t.plankSeconds ? (
+                  <span style={{ fontFamily: "Inter", fontSize: 12.5, color: T.textPrimary }}>
+                    <strong style={{ fontFamily: "Bebas Neue", fontSize: 18 }}>{t.plankSeconds}s</strong> prancha
+                  </span>
+                ) : null}
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: T.textMuted }}>{t.date}</span>
+              </div>
+              <button
+                onClick={() => removeTest(t.id)}
+                style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 12 }}
+              >
+                remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function TesteDeNivel({ core, updateCore, modalityName }) {
+  if (modalityName === "Corrida de rua") return <TesteNivelCorrida core={core} updateCore={updateCore} />;
+  if (modalityName === "Ciclismo") return <TesteNivelCiclismo core={core} updateCore={updateCore} />;
+  if (modalityName === "Natação") return <TesteNivelNatacao core={core} updateCore={updateCore} />;
+  if (modalityName === "Musculação / Academia") return <TesteNivelForca core={core} updateCore={updateCore} />;
+  if (modalityName === "Treino em casa (calistenia/funcional)") return <TesteNivelCalistenia core={core} updateCore={updateCore} />;
+  return null;
 }
 
 function Treinos({ core, updateCore, profile }) {
@@ -2803,8 +3255,10 @@ function Treinos({ core, updateCore, profile }) {
 
       const others = modalities.filter((m) => m.id !== focusId);
       const latestAssessment = (core.trainingAssessments || [])[0];
-      const isRunningFocus = focusModality.name.toLowerCase().includes("corrida");
-      const latestLevelTest = isRunningFocus ? (core.levelTests || [])[0] : null;
+      const levelTestsForFocus = (core.levelTests || [])
+        .filter((t) => t.modality === focusModality.name)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      const latestLevelTest = levelTestsForFocus[0] || null;
 
       const { plannedWorkouts, truncated } = await api.ai.gerarPlanilha({
         profile: { name: profile.name, level: profile.level },
@@ -2820,9 +3274,7 @@ function Treinos({ core, updateCore, profile }) {
               gaps: latestAssessment.gaps,
             }
           : null,
-        latestLevelTest: latestLevelTest
-          ? { distanceKm: latestLevelTest.distanceKm, timeSeconds: latestLevelTest.timeSeconds, date: latestLevelTest.date }
-          : null,
+        latestLevelTest: latestLevelTest ? { ...latestLevelTest, id: undefined } : null,
         preferences: preferences.trim(),
         recentTrainings: recent,
         weeks,
@@ -2909,7 +3361,7 @@ function Treinos({ core, updateCore, profile }) {
 
       <TreinoAtualImport core={core} updateCore={updateCore} profile={profile} />
 
-      <TesteNivelCorrida core={core} updateCore={updateCore} />
+      <TesteDeNivel core={core} updateCore={updateCore} modalityName={focusModality && focusModality.name} />
 
       <Card>
         <Label>Montar planilha de treino</Label>
@@ -2965,6 +3417,8 @@ function Treinos({ core, updateCore, profile }) {
               <Select value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} style={{ width: 130 }}>
                 <option value={1}>1 semana</option>
                 <option value={2}>2 semanas</option>
+                <option value={4}>4 semanas</option>
+                <option value={6}>6 semanas</option>
               </Select>
               <Btn variant="gold" onClick={() => generatePlan(false)} disabled={generating}>
                 {generating ? "Gerando..." : "Gerar planilha"}
@@ -2983,9 +3437,9 @@ function Treinos({ core, updateCore, profile }) {
                 <span style={{ fontFamily: "Inter", fontSize: 12, color: T.good }}>{copyMsg}</span>
               )}
             </div>
-            {nextGoal && Math.ceil(daysUntil(nextGoal.targetDate) / 7) > 2 && (
+            {nextGoal && Math.ceil(daysUntil(nextGoal.targetDate) / 7) > 6 && (
               <div style={{ fontFamily: "Inter", fontSize: 12, color: T.textMuted, marginTop: 8 }}>
-                A prova está a {Math.ceil(daysUntil(nextGoal.targetDate) / 7)} semanas — a IA gera 2 semanas por vez, ajustadas à fase atual da preparação. Volte aqui periodicamente pra gerar as próximas.
+                A prova está a {Math.ceil(daysUntil(nextGoal.targetDate) / 7)} semanas — a IA gera até 6 semanas por vez, ajustadas à fase atual da preparação. Volte aqui periodicamente pra gerar as próximas.
               </div>
             )}
           </>

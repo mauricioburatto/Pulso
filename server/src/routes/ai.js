@@ -108,20 +108,53 @@ router.post(
     const othersList = others || [];
     const recent = recentTrainings || [];
 
+    const MAX_PLAN_WEEKS = 6;
     const weeksToGoal = toGoal && nextGoal ? Math.max(1, Math.ceil(daysUntil(nextGoal.targetDate) / 7)) : null;
-    const cappedWeeks = weeksToGoal ? Math.min(weeksToGoal, 2) : Math.min(weeks || 2, 2);
+    const cappedWeeks = weeksToGoal ? Math.min(weeksToGoal, MAX_PLAN_WEEKS) : Math.min(weeks || 2, MAX_PLAN_WEEKS);
     const isCapped = weeksToGoal && weeksToGoal > cappedWeeks;
 
-    const levelTestLine =
-      latestLevelTest && latestLevelTest.timeSeconds
-        ? (() => {
-            const m = Math.floor(latestLevelTest.timeSeconds / 60);
-            const s = Math.round(latestLevelTest.timeSeconds % 60);
-            return `Teste de nível do atleta: ${latestLevelTest.distanceKm || 1}km ao máximo em ${m}:${String(s).padStart(2, '0')} (feito em ${latestLevelTest.date ? String(latestLevelTest.date).slice(0, 10) : 'data não informada'}). Use esse resultado pra calcular os ritmos de treino (fácil, moderado, forte/limiar) em min/km — inclua o ritmo alvo na descrição de cada sessão de corrida com pace definido (ex: "6x400m a 4:30/km").`;
-          })()
-        : '';
+    function formatMinSec(totalSeconds) {
+      const m = Math.floor(totalSeconds / 60);
+      const s = Math.round(totalSeconds % 60);
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
 
-    const system = `Você é um treinador esportivo. Gere uma planilha de treinos com foco em uma modalidade principal, considerando também outras modalidades que o atleta já pratica em paralelo (para não sobrecarregar, sem duplicar o trabalho delas). Respeite fielmente qualquer preferência ou restrição que o atleta informar (ex: "não fazer treino de tiro" significa nunca incluir esse tipo de sessão). Quando houver um teste de nível (tempo num teste de corrida), use-o pra calcular ritmos de treino reais em min/km e inclua esses ritmos na descrição das sessões de corrida, em vez de só intensidade genérica. Responda APENAS com um array JSON compacto, sem texto antes ou depois, sem markdown, sem espaços desnecessários. Cada item: {"date":"YYYY-MM-DD","modality":"nome curto da modalidade deste treino (uma das informadas, ou 'Descanso')","title":"até 4 palavras","description":"até 8 palavras, telegráfico, sem frase completa","intensity":"leve|moderado|alto"}. Pode haver mais de um item na mesma data se fizer sentido (ex: foco + outra modalidade leve), ou um único item "Descanso". Seja extremamente econômico em texto — isso é crítico, a resposta tem limite curto de tamanho.`;
+    function buildLevelTestLine(test) {
+      if (!test) return '';
+      const dateStr = test.date ? String(test.date).slice(0, 10) : 'data não informada';
+      switch (test.kind) {
+        case 'corrida_1km':
+          if (!test.timeSeconds) return '';
+          return `Teste de nível do atleta (corrida): ${test.distanceKm || 1}km ao máximo em ${formatMinSec(test.timeSeconds)} (feito em ${dateStr}). Use esse resultado pra calcular os ritmos de treino (fácil, moderado, forte/limiar) em min/km — inclua o ritmo alvo na descrição de cada sessão de corrida com pace definido (ex: "6x400m a 4:30/km").`;
+        case 'ciclismo_tt': {
+          if (!test.timeSeconds || !test.distanceKm) return '';
+          const kmh = (test.distanceKm / (test.timeSeconds / 3600)).toFixed(1);
+          return `Teste de nível do atleta (ciclismo): ${test.distanceKm}km em ${formatMinSec(test.timeSeconds)} (velocidade média ${kmh}km/h), feito em ${dateStr}. Use esse resultado pra calcular as faixas de treino (recuperação, moderado, limiar) e inclua a velocidade ou RPE-alvo na descrição de cada sessão de ciclismo.`;
+        }
+        case 'natacao_css': {
+          if (!test.time400Seconds || !test.time200Seconds) return '';
+          const pace100 = (test.time400Seconds - test.time200Seconds) * 0.5;
+          return `Teste de nível do atleta (natação): 400m em ${formatMinSec(test.time400Seconds)} e 200m em ${formatMinSec(test.time200Seconds)} (ritmo crítico estimado: ${formatMinSec(pace100)} min/100m), feito em ${dateStr}. Use esse resultado pra calcular os ritmos de treino de natação (regenerativo, moderado, limiar) em min/100m e inclua o ritmo alvo na descrição de cada sessão de natação.`;
+        }
+        case '1rm':
+          if (!test.estimated1RM) return '';
+          return `Teste de força do atleta: 1RM estimado de ${test.estimated1RM}kg no ${test.exercise || 'exercício principal'} (${test.weight}kg x ${test.reps} reps, fórmula de Epley), feito em ${dateStr}. Use esse resultado pra calibrar as cargas de treino (% do 1RM) nas sessões de musculação com esse exercício ou exercícios relacionados, e inclua a carga-alvo (ex: "70% 1RM, 4x8") na descrição das sessões.`;
+        case 'calistenia': {
+          const parts = [];
+          if (test.pushups) parts.push(`${test.pushups} flexões em 1 min`);
+          if (test.squats) parts.push(`${test.squats} agachamentos em 1 min`);
+          if (test.plankSeconds) parts.push(`prancha de ${test.plankSeconds}s`);
+          if (!parts.length) return '';
+          return `Teste de nível do atleta (treino em casa): ${parts.join(', ')}, feito em ${dateStr}. Use esse resultado pra calibrar o volume e a intensidade das sessões (número de séries e repetições) ao nível real dele.`;
+        }
+        default:
+          return '';
+      }
+    }
+
+    const levelTestLine = buildLevelTestLine(latestLevelTest);
+
+    const system = `Você é um treinador esportivo. Gere uma planilha de treinos com foco em uma modalidade principal, considerando também outras modalidades que o atleta já pratica em paralelo (para não sobrecarregar, sem duplicar o trabalho delas). Respeite fielmente qualquer preferência ou restrição que o atleta informar (ex: "não fazer treino de tiro" significa nunca incluir esse tipo de sessão). Quando houver um teste de nível do atleta, use-o pra calcular parâmetros reais de treino (ritmo, velocidade, carga ou volume, conforme a modalidade) e inclua esse parâmetro na descrição das sessões, em vez de só intensidade genérica. Responda APENAS com um array JSON compacto, sem texto antes ou depois, sem markdown, sem espaços desnecessários. Cada item: {"date":"YYYY-MM-DD","modality":"nome curto da modalidade deste treino (uma das informadas, ou 'Descanso')","title":"até 4 palavras","description":"até 8 palavras, telegráfico, sem frase completa","intensity":"leve|moderado|alto"}. Pode haver mais de um item na mesma data se fizer sentido (ex: foco + outra modalidade leve), ou um único item "Descanso". Seja extremamente econômico em texto — isso é crítico, a resposta tem limite curto de tamanho.`;
 
     const userMsg = `Atleta: ${profile.name}, nível ${profile.level}.
 Foco desta planilha: ${focusModality.name} (${focusModality.frequency}).${
@@ -143,7 +176,7 @@ Gere ${cappedWeeks} semana(s) a partir de ${new Date().toISOString().slice(0, 10
     const { text, truncated } = await callClaude({
       system,
       messages: [{ role: 'user', content: userMsg }],
-      maxTokens: 1000,
+      maxTokens: Math.min(4500, 700 + cappedWeeks * 600),
     });
 
     const parsed = extractJsonArray(text);
